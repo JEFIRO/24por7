@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import 'buscar_produto.dart';
 import 'cadastra_produto.dart';
+import 'lista_produto.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -27,7 +29,7 @@ class HomePage extends StatelessWidget {
                   elevation: 10,
                   child: InkWell(
                     borderRadius: BorderRadius.circular(12),
-                    onTap: (){
+                    onTap: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -48,7 +50,9 @@ class HomePage extends StatelessWidget {
                                 children: [
                                   Text(
                                     'Cadastro',
-                                    style: TextStyle(fontWeight: FontWeight.w700),
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
                                   SizedBox(width: 5),
                                   Icon(Icons.add),
@@ -79,11 +83,11 @@ class HomePage extends StatelessWidget {
                   elevation: 10,
                   child: InkWell(
                     borderRadius: BorderRadius.circular(12),
-                    onTap: (){
+                    onTap: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => CadastraProduto(),
+                          builder: (context) => BuscarProduto(),
                         ),
                       );
                     },
@@ -100,7 +104,9 @@ class HomePage extends StatelessWidget {
                                 children: [
                                   Text(
                                     'Buscar Produto',
-                                    style: TextStyle(fontWeight: FontWeight.w700),
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
                                   SizedBox(width: 5),
                                   Icon(Icons.search),
@@ -109,7 +115,61 @@ class HomePage extends StatelessWidget {
                               Row(
                                 children: [
                                   Text(
-                                    'Emcontrar um item',
+                                    'Encontrar um item',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.grey,
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          Icon(Icons.keyboard_arrow_right_sharp),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                Card(
+                  color: Colors.white,
+                  elevation: 10,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ListaProduto(),
+                        ),
+                      );
+                    },
+                    child: Padding(
+                      padding: EdgeInsets.all(8),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            mainAxisAlignment: MainAxisAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Text(
+                                    'Listar Produto',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  SizedBox(width: 5),
+                                  Icon(Icons.list),
+                                ],
+                              ),
+                              Row(
+                                children: [
+                                  Text(
+                                    'Encontrar um item',
                                     style: TextStyle(
                                       fontWeight: FontWeight.w700,
                                       color: Colors.grey,
@@ -134,5 +194,3 @@ class HomePage extends StatelessWidget {
     );
   }
 }
-
-
