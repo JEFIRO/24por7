@@ -1,6 +1,3 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-
 class ProdutoAPI {
   final String codigo;
   final String nome;
@@ -42,17 +39,15 @@ class ProdutoAPI {
       marca: product['brands'],
       descricao: product['generic_name'],
       quantidade: product['quantity'],
-      quantidadeNumerica:
-      (product['product_quantity'] as num?)?.toDouble(),
+      quantidadeNumerica: (product['product_quantity'] as num?)?.toDouble(),
       unidade: product['product_quantity_unit'],
 
       imagem: product['image_url'],
       imagemThumb: product['image_thumb_url'],
       imagemSmall: product['image_small_url'],
 
-      keywords: (product['_keywords'] as List?)
-          ?.map((e) => e.toString())
-          .toList() ??
+      keywords:
+          (product['_keywords'] as List?)?.map((e) => e.toString()).toList() ??
           [],
     );
   }

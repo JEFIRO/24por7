@@ -1,213 +1,140 @@
-import 'package:app_24por7/src/model/Produto.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
-import 'ScannerPage.dart';
+
+import '../model/produto.dart';
+import '../model/produto_repository.dart';
+import 'scanner_page.dart';
 
 class BuscarProduto extends StatefulWidget {
-  const BuscarProduto({super.key});
+  const BuscarProduto({super.key, this.repository});
+  final ProdutoRepository? repository;
 
   @override
   State<BuscarProduto> createState() => _BuscarProdutoState();
 }
 
 class _BuscarProdutoState extends State<BuscarProduto> {
-  TextEditingController barCodeController = TextEditingController();
-  Produto? produto;
-  bool isLoading = false;
+  late final ProdutoRepository _repository;
+  final _codigo = TextEditingController();
+  Produto? _produto;
+  bool _loading = false;
+  String? _error;
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text('Busca Produtos')),
+  void initState() {
+    super.initState();
+    _repository = widget.repository ?? ProdutoRepository();
+  }
 
-      body: Padding(
-        padding: EdgeInsets.all(12),
-        child: ListView(
-          children: [
-            Card(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              elevation: 10,
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  children: [
-                    TextField(
-                      controller: barCodeController,
-                      readOnly: true, // 🔒 impede digitação
-                      decoration: InputDecoration(
-                        labelText: 'Código de barras',
-                        hintText: 'Use o scanner',
-                        prefixIcon: const Icon(Icons.search),
-
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-
-                        suffixIcon: IconButton(
-                          onPressed: () async {
-                            final result = await Navigator.push<String>(
-                              context,
-                              MaterialPageRoute(builder: (_) => ScannerPage()),
-                            );
-
-                            if (result != null) {
-                              barCodeController.text = result;
-                              _buscar(result);
-                            }
-                          },
-                          icon: const Icon(Icons.qr_code_scanner),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            if (isLoading)
-              const Center(child: CircularProgressIndicator())
-            else if (produto != null)
-              Card(
-                elevation: 6,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (produto!.foto != null)
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: Image.network(
-                            produto!.foto!,
-                            height: 150,
-                            width: double.infinity,
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                      // 📦 Nome + categoria
-                      Text(
-                        produto!.nome,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-
-                      const SizedBox(height: 4),
-
-                      Text(
-                        produto!.categoria,
-                        style: TextStyle(
-                          color: Colors.grey[600],
-                        ),
-                      ),
-
-                      const Divider(height: 20),
-
-                      // 💰 Preço
-                      Text(
-                        "Preço: R\$ ${produto!.preco.toStringAsFixed(2)}",
-                        style: const TextStyle(fontSize: 16),
-                      ),
-
-                      // 📊 Quantidade
-                      Text(
-                        "Estoque: ${produto!.quantidade} ${produto!.unidadeMedida}",
-                      ),
-
-                      // ⚖️ Peso
-                      Text(
-                        "Peso: ${produto!.peso} ${produto!.unidadeMedida}",
-                      ),
-
-                      Text(
-                        "Tolerância: ±${produto!.pesoTolerancia}",
-                        style: TextStyle(color: Colors.grey[700]),
-                      ),
-
-                      const SizedBox(height: 10),
-
-                      // 📝 Descrição (se tiver)
-                      if (produto!.descricao != null && produto!.descricao!.isNotEmpty)
-                        Text(
-                          produto!.descricao!,
-                          style: TextStyle(color: Colors.grey[800]),
-                        ),
-
-                      const SizedBox(height: 10),
-
-                      // 🔢 Código
-                      Text(
-                        "Código: ${produto!.codigo}",
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[600],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              )
-            else
-              const Center(child: Text("Nenhum produto carregado")),
-          ],
-        ),
-      ),
-    );
+  @override
+  void dispose() {
+    _codigo.dispose();
+    super.dispose();
   }
 
   Future<void> _buscar(String codigo) async {
-    final url = Uri.parse("http://192.168.86.7:8080/produtos/$codigo");
-
-    setState(() => isLoading = true);
-
+    if (codigo.trim().isEmpty) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+      _produto = null;
+    });
     try {
-      final response = await http.get(
-        url,
-        headers: {"Content-Type": "application/json"},
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-
-        setState(() {
-          produto = Produto.fromJson(data);
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Produto encontrado com sucesso'),
-            backgroundColor: Color(0xFF1D9E75),
-          ),
-        );
-      } else if (response.statusCode == 404) {
-        setState(() => produto = null);
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Produto não encontrado'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      }
-    } catch (e) {
-      print("Erro ao buscar produto: $e");
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Erro de conexão'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      final product = await _repository.buscarPorCodigo(codigo.trim());
+      if (mounted) setState(() => _produto = product);
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
-
-    setState(() => isLoading = false);
   }
+
+  Future<void> _scan() async {
+    final result = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (_) => const ScannerPage()),
+    );
+    if (result != null) {
+      _codigo.text = result;
+      await _buscar(result);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Buscar produto')),
+    body: ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        TextField(
+          controller: _codigo,
+          decoration: InputDecoration(
+            labelText: 'SKU ou código de barras',
+            suffixIcon: IconButton(
+              onPressed: _scan,
+              icon: const Icon(Icons.qr_code_scanner),
+            ),
+          ),
+          onSubmitted: _buscar,
+        ),
+        const SizedBox(height: 12),
+        FilledButton(
+          onPressed: _loading ? null : () => _buscar(_codigo.text),
+          child: const Text('BUSCAR'),
+        ),
+        if (_loading)
+          const Padding(
+            padding: EdgeInsets.all(32),
+            child: Center(child: CircularProgressIndicator()),
+          ),
+        if (_error != null)
+          Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              _error!,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ),
+        if (_produto != null) _ProductDetails(product: _produto!),
+      ],
+    ),
+  );
+}
+
+class _ProductDetails extends StatelessWidget {
+  const _ProductDetails({required this.product});
+  final Produto product;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    margin: const EdgeInsets.only(top: 20),
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(product.nome, style: Theme.of(context).textTheme.titleLarge),
+          Text(
+            product.preco.currency,
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const Divider(),
+          Text('SKU: ${product.codigoInterno}'),
+          Text('Categoria: ${product.categoria}'),
+          Text('Unidade: ${product.unidadeMedida}'),
+          Text('Status: ${product.ativo ? "ATIVO" : "INATIVO"}'),
+          const SizedBox(height: 8),
+          const Text(
+            'Códigos de barras',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          ...product.codigosBarras.map(
+            (code) => Text(
+              '${code.codigo} • ${code.tipo}${code.principal ? " • Principal" : ""}',
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 }

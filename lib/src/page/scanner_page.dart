@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 class ScannerPage extends StatefulWidget {
+  const ScannerPage({super.key});
+
   @override
-  _ScannerPageState createState() => _ScannerPageState();
+  State<ScannerPage> createState() => _ScannerPageState();
 }
 
 class _ScannerPageState extends State<ScannerPage> {
@@ -22,8 +24,6 @@ class _ScannerPageState extends State<ScannerPage> {
 
             if (code != null) {
               scanned = true;
-
-              print("Código: $code");
 
               Navigator.pop(context, code);
               break;
