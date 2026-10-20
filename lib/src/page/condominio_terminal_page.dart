@@ -4,6 +4,7 @@ import '../../core/theme/app_tokens.dart';
 import '../../core/widgets/app_content.dart';
 import '../../core/widgets/async_state.dart';
 import '../model/operational_repository.dart';
+import 'terminal_pairing.dart';
 
 class CondominioTerminalPage extends StatefulWidget {
   const CondominioTerminalPage({super.key, this.repository});
@@ -91,6 +92,24 @@ class _CondominioTerminalPageState extends State<CondominioTerminalPage> {
             content: Text(
               current == null ? 'Terminal cadastrado.' : 'Terminal atualizado.',
             ),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _pairTerminal(TerminalAdmin terminal) async {
+    final paired = await showTerminalPairingDialog(
+      context,
+      repository: _repository,
+      terminal: terminal,
+    );
+    if (paired == true) {
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Terminal pareado. Ele será ativado em instantes.'),
           ),
         );
       }
@@ -349,6 +368,7 @@ class _CondominioTerminalPageState extends State<CondominioTerminalPage> {
                 trailing: PopupMenuButton<String>(
                   onSelected: (action) {
                     if (action == 'edit') _editTerminal(item);
+                    if (action == 'pair') _pairTerminal(item);
                     if (action == 'detail') {
                       Navigator.pushNamed(context, '/terminais/${item.id}');
                     }
@@ -357,6 +377,10 @@ class _CondominioTerminalPageState extends State<CondominioTerminalPage> {
                     PopupMenuItem(
                       value: 'detail',
                       child: Text('Ver monitoramento'),
+                    ),
+                    PopupMenuItem(
+                      value: 'pair',
+                      child: Text('Parear Terminal'),
                     ),
                     PopupMenuItem(
                       value: 'edit',
@@ -535,7 +559,10 @@ class _TerminalDialogState extends State<_TerminalDialog> {
   late final TextEditingController _serial;
   late final TextEditingController _mac;
   late final TextEditingController _ip;
+  final _codigo = TextEditingController();
   late String _condominioId;
+  // Se o pareamento falhar depois do cadastro, um novo "Salvar" não duplica o Terminal.
+  String? _createdId;
   bool _loading = false;
   String? _error;
 
@@ -558,6 +585,7 @@ class _TerminalDialogState extends State<_TerminalDialog> {
     _serial.dispose();
     _mac.dispose();
     _ip.dispose();
+    _codigo.dispose();
     super.dispose();
   }
 
@@ -568,14 +596,29 @@ class _TerminalDialogState extends State<_TerminalDialog> {
       _error = null;
     });
     try {
-      await widget.repository.salvarTerminal(
-        id: widget.current?.id,
+      final saved = await widget.repository.salvarTerminal(
+        id: widget.current?.id ?? _createdId,
         condominioId: _condominioId,
         nome: _nome.text.trim(),
         serialNumber: _serial.text.trim(),
         macAddress: _mac.text.trim(),
         ipAddress: _ip.text.trim(),
       );
+      _createdId = saved.id;
+      final code = parsePairingCode(_codigo.text);
+      if (code != null) {
+        try {
+          await widget.repository.parearTerminal(saved.id, code);
+        } catch (error) {
+          if (mounted) {
+            setState(
+              () => _error =
+                  'Terminal salvo, mas não pareado: ${pairingErrorMessage(error)}',
+            );
+          }
+          return;
+        }
+      }
       if (mounted) Navigator.pop(context, true);
     } catch (error) {
       if (mounted) setState(() => _error = error.toString());
@@ -618,9 +661,14 @@ class _TerminalDialogState extends State<_TerminalDialog> {
                   : null,
             ),
             const SizedBox(height: AppSpacing.md),
+            PairingCodeField(controller: _codigo, enabled: !_loading),
+            const SizedBox(height: AppSpacing.md),
             TextField(
               controller: _serial,
-              decoration: const InputDecoration(labelText: 'Número de série'),
+              decoration: const InputDecoration(
+                labelText: 'Número de série',
+                helperText: 'Preenchido automaticamente ao parear',
+              ),
             ),
             const SizedBox(height: AppSpacing.md),
             TextField(

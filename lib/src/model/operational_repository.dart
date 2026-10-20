@@ -162,7 +162,7 @@ class OperationalRepository {
   }) async {
     final body = {
       'nome': nome,
-      'serialNumber': serialNumber,
+      'serialNumber': serialNumber?.isEmpty == true ? null : serialNumber,
       'macAddress': macAddress,
       'ipAddress': ipAddress,
     };
@@ -171,6 +171,15 @@ class OperationalRepository {
         : await client.put('/terminais/$id', body);
     return TerminalAdmin.fromJson(Map<String, dynamic>.from(response as Map));
   }
+
+  /// Confirma o código mostrado na tela do Terminal. O backend grava serial/MAC/IP
+  /// do equipamento e entrega a credencial direto a ele; o app nunca a vê.
+  Future<TerminalAdmin> parearTerminal(String id, String code) async =>
+      TerminalAdmin.fromJson(
+        Map<String, dynamic>.from(
+          await client.post('/terminais/$id/pairing', {'code': code}) as Map,
+        ),
+      );
 
   Future<Map<String, dynamic>> onboarding(Map<String, dynamic> payload) async =>
       Map<String, dynamic>.from(
