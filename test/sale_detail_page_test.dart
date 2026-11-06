@@ -31,6 +31,8 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      expect(find.textContaining('Residencial Sol'), findsWidgets);
+      expect(find.textContaining('Totem 1'), findsWidgets);
       await tester.tap(find.textContaining('#ABCDEF12').first);
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);

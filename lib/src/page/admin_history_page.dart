@@ -82,9 +82,9 @@ class SalesHistoryPage extends StatelessWidget {
       row: (sale) => (
         title: AppFormatters.currencyText(sale.total.persistence),
         meta:
+            '${sale.condominioNome} · ${sale.terminalNome}\n'
             '${shortSaleId(sale.id)} · '
-            '${AppFormatters.dateTime(sale.pagaEm ?? sale.criadaEm)}\n'
-            '${sale.condominioNome} · ${sale.terminalNome}',
+            '${AppFormatters.dateTime(sale.pagaEm ?? sale.criadaEm)}',
         trailing: saleStatusBadge(sale.status),
       ),
     );
