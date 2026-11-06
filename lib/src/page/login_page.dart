@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme/app_theme.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/theme/branding_config.dart';
 import '../model/api_client.dart';
@@ -62,26 +63,28 @@ class _LoginPageState extends State<LoginPage> {
                 Row(
                   children: [
                     CircleAvatar(
-                      radius: 26,
+                      radius: 20,
+                      backgroundColor: AppThemeColors.of(context).brand,
+                      foregroundColor: AppThemeColors.of(context).onBrand,
                       child: Text(brand.displayName.characters.first),
                     ),
                     const SizedBox(width: AppSpacing.md),
                     Expanded(
                       child: Text(
                         brand.displayName,
-                        style: Theme.of(context).textTheme.headlineSmall,
+                        style: Theme.of(context).textTheme.titleMedium,
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: AppSpacing.xxl),
                 Text(
-                  'Bem-vindo',
+                  'Entrar no painel',
                   style: Theme.of(context).textTheme.headlineMedium,
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
-                  'Acesse o painel administrativo da sua operação.',
+                  'Use o CPF e a senha do gestor da Empresa.',
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
@@ -91,19 +94,19 @@ class _LoginPageState extends State<LoginPage> {
                   controller: _cpf,
                   decoration: const InputDecoration(
                     labelText: 'CPF',
-                    prefixIcon: Icon(Icons.badge),
+                    prefixIcon: Icon(Icons.badge_outlined),
                   ),
                   keyboardType: TextInputType.number,
                   validator: (v) =>
                       v == null || v.trim().isEmpty ? 'Informe o CPF' : null,
                 ),
-                const SizedBox(height: AppSpacing.md),
+                const SizedBox(height: AppSpacing.lg),
                 TextFormField(
                   controller: _senha,
                   obscureText: true,
                   decoration: const InputDecoration(
                     labelText: 'Senha',
-                    prefixIcon: Icon(Icons.lock),
+                    prefixIcon: Icon(Icons.lock_outline),
                   ),
                   validator: (v) =>
                       v == null || v.isEmpty ? 'Informe a senha' : null,
@@ -111,10 +114,10 @@ class _LoginPageState extends State<LoginPage> {
                 ),
                 if (_error != null)
                   Padding(
-                    padding: const EdgeInsets.only(top: AppSpacing.md),
+                    padding: const EdgeInsets.only(top: AppSpacing.lg),
                     child: Text(
                       _error!,
-                      style: TextStyle(
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: Theme.of(context).colorScheme.error,
                       ),
                     ),
@@ -151,38 +154,31 @@ class _LoginPageState extends State<LoginPage> {
               children: [
                 Expanded(
                   child: ColoredBox(
-                    color: Theme.of(context).colorScheme.primaryContainer,
+                    color: AppThemeColors.of(context).brand,
                     child: Padding(
                       padding: const EdgeInsets.all(64),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(
-                            Icons.storefront_outlined,
-                            size: 72,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                          const SizedBox(height: AppSpacing.xl),
                           Text(
-                            'Operação clara,\ndo estoque ao Terminal.',
-                            style: Theme.of(context).textTheme.displaySmall
+                            brand.displayName,
+                            style: Theme.of(context).textTheme.headlineLarge
                                 ?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onPrimaryContainer,
+                                  color: AppThemeColors.of(context).onBrand,
                                 ),
                           ),
-                          const SizedBox(height: AppSpacing.lg),
-                          Text(
-                            'Gerencie mercados autônomos, acompanhe equipamentos e tome decisões em um único painel.',
-                            style: Theme.of(context).textTheme.titleMedium
-                                ?.copyWith(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onPrimaryContainer,
-                                ),
+                          const SizedBox(height: AppSpacing.md),
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 440),
+                            child: Text(
+                              'Mercados autônomos dos seus Condomínios: Terminais, catálogo, estoque e pagamentos.',
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.w400,
+                                    color: AppThemeColors.of(context).onBrand,
+                                  ),
+                            ),
                           ),
                         ],
                       ),

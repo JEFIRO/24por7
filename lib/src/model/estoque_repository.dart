@@ -1,3 +1,4 @@
+import 'admin_history.dart';
 import 'produto.dart';
 import 'api_client.dart';
 import 'decimal_value.dart';
@@ -9,7 +10,9 @@ class EstoqueRepository {
     : client = client ?? ApiClient.instance;
   final ApiClient client;
 
-  Future<List<EstoqueCentral>> listarCentral({
+  Future<AdminPage<EstoqueCentral>> listarCentralPagina({
+    int page = 0,
+    int size = 50,
     String? busca,
     String? categoria,
     bool? ativo,
@@ -17,29 +20,54 @@ class EstoqueRepository {
     final data = await client.get(
       '/estoque-empresa',
       query: {
-        'page': '0',
-        'size': '100',
+        'page': '$page',
+        'size': '$size',
         'sort': 'produto.nome,asc',
         'busca': busca,
         'categoria': categoria,
         'ativo': ativo?.toString(),
       },
     );
-    return ((data as Map)['content'] as List)
-        .whereType<Map>()
-        .map((e) => EstoqueCentral.fromJson(Map<String, dynamic>.from(e)))
-        .toList();
+    return AdminPage.fromJson(
+      Map<String, dynamic>.from(data as Map),
+      EstoqueCentral.fromJson,
+    );
+  }
+
+  /// Percorre todas as páginas; use só onde a tela precisa da lista completa.
+  Future<List<EstoqueCentral>> listarCentral({
+    String? busca,
+    String? categoria,
+    bool? ativo,
+  }) async {
+    final items = <EstoqueCentral>[];
+    for (var page = 0; ; page++) {
+      final result = await listarCentralPagina(
+        page: page,
+        size: 100,
+        busca: busca,
+        categoria: categoria,
+        ativo: ativo,
+      );
+      items.addAll(result.items);
+      if (result.items.isEmpty || page + 1 >= result.totalPages) return items;
+    }
   }
 
   Future<List<Produto>> listarProdutos() async {
-    final data = await client.get(
-      '/estoque-empresa/produtos',
-      query: {'page': '0', 'size': '100', 'sort': 'nome,asc'},
-    );
-    return ((data as Map)['content'] as List)
-        .whereType<Map>()
-        .map((e) => Produto.fromJson(Map<String, dynamic>.from(e)))
-        .toList();
+    final items = <Produto>[];
+    for (var page = 0; ; page++) {
+      final data = await client.get(
+        '/estoque-empresa/produtos',
+        query: {'page': '$page', 'size': '100', 'sort': 'nome,asc'},
+      );
+      final result = AdminPage.fromJson(
+        Map<String, dynamic>.from(data as Map),
+        Produto.fromJson,
+      );
+      items.addAll(result.items);
+      if (result.items.isEmpty || page + 1 >= result.totalPages) return items;
+    }
   }
 
   Future<EstoqueCentral> movimentar(

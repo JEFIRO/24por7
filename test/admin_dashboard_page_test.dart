@@ -136,7 +136,10 @@ class _FailingAdminRepository extends AdminRepository {
 
 Widget _app(Widget child) => BrandingScope(
   branding: const BrandingConfig(displayName: 'Mercado Teste'),
-  child: MaterialApp(theme: ThemeData(useMaterial3: true), home: child),
+  child: MaterialApp(
+    theme: ThemeData(useMaterial3: true),
+    home: Scaffold(body: child),
+  ),
 );
 
 Future<void> _surface(WidgetTester tester, Size size) async {

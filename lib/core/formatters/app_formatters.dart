@@ -19,4 +19,10 @@ abstract final class AppFormatters {
   static String dateTime(DateTime? value) => value == null
       ? 'Não informado'
       : _dateTime.format(AppTime.inSaoPaulo(value));
+
+  static String time(DateTime value) {
+    final local = AppTime.inSaoPaulo(value);
+    return '${local.hour.toString().padLeft(2, '0')}:'
+        '${local.minute.toString().padLeft(2, '0')}';
+  }
 }

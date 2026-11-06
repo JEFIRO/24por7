@@ -3,6 +3,10 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../core/theme/app_tokens.dart';
+import '../../core/widgets/app_content.dart';
+import '../../core/widgets/async_state.dart';
+import '../../core/widgets/status_badge.dart';
 import '../model/terminal_telemetry.dart';
 import '../model/terminal_telemetry_repository.dart';
 import 'monitoring_dashboard_page.dart';
@@ -96,131 +100,48 @@ class _TerminalTelemetryDetailPageState
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
-      title: Text(_terminal?.terminalNome ?? 'Telemetria do Terminal'),
-      actions: [IconButton(onPressed: _load, icon: const Icon(Icons.refresh))],
+      title: Text(_terminal?.terminalNome ?? 'Detalhe do Terminal'),
+      actions: [
+        Padding(
+          padding: const EdgeInsets.only(right: AppSpacing.sm),
+          child: TextButton.icon(
+            onPressed: _load,
+            icon: const Icon(Icons.refresh, size: 18),
+            label: const Text('Atualizar'),
+          ),
+        ),
+      ],
     ),
     body: _loading && _terminal == null
-        ? const Center(child: CircularProgressIndicator())
+        ? const AppLoadingState(label: 'Carregando telemetria do Terminal…')
         : _error != null && _terminal == null
-        ? Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.cloud_off, size: 52),
-                  const SizedBox(height: 12),
-                  Text(_error!, textAlign: TextAlign.center),
-                  const SizedBox(height: 16),
-                  OutlinedButton(
-                    onPressed: _load,
-                    child: const Text('TENTAR NOVAMENTE'),
-                  ),
-                ],
-              ),
-            ),
+        ? AppErrorState(
+            title: 'Não foi possível carregar o Terminal',
+            message: _error!,
+            onRetry: _load,
           )
         : RefreshIndicator(
             onRefresh: _load,
             child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: _content(context, _terminal!),
+              children: [AppContent(child: _content(context, _terminal!))],
             ),
           ),
   );
 
-  List<Widget> _content(BuildContext context, TerminalTelemetry terminal) {
+  Widget _content(BuildContext context, TerminalTelemetry terminal) {
+    final theme = Theme.of(context);
     final system = terminal.system;
     final network = terminal.network;
     final app = terminal.application;
     final display = terminal.display;
-    final statusColor = telemetryStatusColor(context, terminal.status);
     final powerProblem = system?.undervoltageNow == true;
-    return [
-      Card(
-        child: Padding(
-          padding: const EdgeInsets.all(18),
-          child: Row(
-            children: [
-              Icon(
-                terminal.online
-                    ? Icons.monitor_heart
-                    : Icons.desktop_access_disabled,
-                size: 42,
-                color: statusColor,
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(terminal.condominioNome),
-                    Text(
-                      terminal.online ? 'ONLINE' : 'OFFLINE',
-                      style: TextStyle(
-                        color: statusColor,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      terminal.status.label,
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    if (terminal.reasons.isNotEmpty)
-                      Text(terminal.reasons.join(' • ')),
-                  ],
-                ),
-              ),
-              Text(
-                'Último sinal\n${telemetryRelativeTime(terminal.lastHeartbeatAt)}',
-                textAlign: TextAlign.end,
-              ),
-            ],
-          ),
-        ),
-      ),
-      if (powerProblem || system?.undervoltageOccurred == true)
-        Card(
-          color: powerProblem
-              ? Theme.of(context).colorScheme.errorContainer
-              : Colors.orange.shade50,
-          child: Padding(
-            padding: const EdgeInsets.all(18),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(
-                  Icons.electrical_services,
-                  color: powerProblem
-                      ? Theme.of(context).colorScheme.error
-                      : Colors.orange.shade900,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'PROBLEMA DE ALIMENTAÇÃO',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      const Text('Subtensão detectada no Raspberry.'),
-                      Text(
-                        'Ocorrendo agora: ${_yesNo(system?.undervoltageNow)}',
-                      ),
-                      Text(
-                        'Detectada desde o último boot: ${_yesNo(system?.undervoltageOccurred)}',
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
+    final reasons = terminal.reasons
+        .where((item) => item != 'Telemetria ainda não recebida')
+        .toList();
+
+    final health = <Widget>[
       _Section(
         title: 'Sistema',
-        icon: Icons.memory,
         children: [
           _DataRow('CPU', _percent(system?.cpuUsagePercent)),
           _DataRow('Temperatura', _number(system?.cpuTemperatureCelsius, '°C')),
@@ -246,29 +167,37 @@ class _TerminalTelemetryDetailPageState
       ),
       _Section(
         title: 'Energia',
-        icon: Icons.electrical_services,
         children: [
-          _DataRow('Subtensão agora', _yesNo(system?.undervoltageNow)),
+          _DataRow(
+            'Subtensão agora',
+            _yesNo(system?.undervoltageNow),
+            alert: system?.undervoltageNow == true,
+          ),
           _DataRow(
             'Subtensão registrada',
             _yesNo(system?.undervoltageOccurred),
           ),
-          _DataRow('Throttling agora', _yesNo(system?.throttledNow)),
+          _DataRow(
+            'Throttling agora',
+            _yesNo(system?.throttledNow),
+            alert: system?.throttledNow == true,
+          ),
           _DataRow('Throttling registrado', _yesNo(system?.throttledOccurred)),
           _DataRow(
             'Frequência limitada agora',
             _yesNo(system?.frequencyCappedNow),
+            alert: system?.frequencyCappedNow == true,
           ),
           _DataRow(
             'Limite térmico agora',
             _yesNo(system?.softTemperatureLimitNow),
+            alert: system?.softTemperatureLimitNow == true,
           ),
           _DataRow('Diagnóstico bruto', system?.throttledRaw ?? 'Indisponível'),
         ],
       ),
       _Section(
         title: 'Rede',
-        icon: Icons.wifi,
         children: [
           _DataRow(
             'Wi-Fi',
@@ -280,10 +209,14 @@ class _TerminalTelemetryDetailPageState
             'Sinal',
             network?.wifiSignalPercent == null
                 ? 'Indisponível'
-                : '${network!.wifiSignalPercent}% — ${_friendlySignal(network.wifiSignalQuality)}',
+                : '${network!.wifiSignalPercent}% · ${telemetryWifiLabel(network.wifiSignalQuality)}',
           ),
           _DataRow('IP local', network?.localIp ?? 'Indisponível'),
-          _DataRow('Backend', _connection(network?.backendReachable)),
+          _DataRow(
+            'Backend',
+            _connection(network?.backendReachable),
+            alert: network?.backendReachable == false,
+          ),
           _DataRow(
             'Latência',
             network?.backendLatencyMs == null
@@ -294,7 +227,6 @@ class _TerminalTelemetryDetailPageState
       ),
       _Section(
         title: 'Aplicação',
-        icon: Icons.apps,
         children: [
           _DataRow('Versão', app?.version ?? 'Indisponível'),
           _DataRow('Aplicação rodando', _duration(app?.uptimeSeconds)),
@@ -303,14 +235,17 @@ class _TerminalTelemetryDetailPageState
             'Último sync',
             telemetryRelativeTime(app?.lastSuccessfulSyncAt),
           ),
-          _DataRow('Último erro de sync', app?.lastSyncError ?? 'Nenhum'),
+          _DataRow(
+            'Último erro de sync',
+            app?.lastSyncError ?? 'Nenhum',
+            alert: app?.lastSyncError != null,
+          ),
           _DataRow('Compra ativa', _yesNo(app?.purchaseActive)),
           _DataRow('Pagamento em andamento', _yesNo(app?.paymentInProgress)),
         ],
       ),
       _Section(
         title: 'Display',
-        icon: Icons.desktop_windows,
         children: [
           _DataRow(
             'Resolução',
@@ -325,6 +260,8 @@ class _TerminalTelemetryDetailPageState
           }),
         ],
       ),
+    ];
+    final activity = <Widget>[
       _HistorySection(
         history: _history,
         loading: _historyLoading,
@@ -336,64 +273,195 @@ class _TerminalTelemetryDetailPageState
         },
       ),
       _AlertsSection(alerts: _alerts),
-      const SizedBox(height: 24),
     ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: AppSpacing.md,
+          runSpacing: AppSpacing.sm,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            AppStatusBadge(
+              label: terminal.status.label,
+              tone: telemetryStatusTone(terminal.status),
+            ),
+            Text(
+              [
+                terminal.condominioNome,
+                terminal.online ? 'Online' : 'Offline',
+                'último sinal ${telemetryRelativeTime(terminal.lastHeartbeatAt)}',
+              ].join(' · '),
+              style: theme.textTheme.bodyLarge?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+        if (reasons.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            reasons.join(' · '),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: telemetryStatusColor(context, terminal.status),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+        if (powerProblem || system?.undervoltageOccurred == true) ...[
+          const SizedBox(height: AppSpacing.xl),
+          _PowerBanner(
+            now: powerProblem,
+            occurredText: _yesNo(system?.undervoltageOccurred),
+            nowText: _yesNo(system?.undervoltageNow),
+          ),
+        ],
+        const SizedBox(height: AppSpacing.xl),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            if (constraints.maxWidth < 1000) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [...health, ...activity],
+              );
+            }
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  flex: 4,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: health,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.section),
+                Expanded(
+                  flex: 5,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: activity,
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _PowerBanner extends StatelessWidget {
+  const _PowerBanner({
+    required this.now,
+    required this.nowText,
+    required this.occurredText,
+  });
+  final bool now;
+  final String nowText;
+  final String occurredText;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = now
+        ? theme.colorScheme.error
+        : appToneColors(context, AppStatusTone.warning).$2;
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: color, width: 2)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.electrical_services, color: color),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Problema de alimentação',
+                  style: theme.textTheme.titleMedium,
+                ),
+                const Text('Subtensão detectada no Raspberry.'),
+                Text(
+                  'Ocorrendo agora: $nowText · desde o último boot: $occurredText',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
 class _Section extends StatelessWidget {
-  const _Section({
-    required this.title,
-    required this.icon,
-    required this.children,
-  });
+  const _Section({required this.title, required this.children});
   final String title;
-  final IconData icon;
   final List<Widget> children;
+
   @override
-  Widget build(BuildContext context) => Card(
-    child: Padding(
-      padding: const EdgeInsets.all(18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon),
-              const SizedBox(width: 8),
-              Text(title, style: Theme.of(context).textTheme.titleLarge),
-            ],
-          ),
-          const Divider(height: 24),
-          ...children,
-        ],
-      ),
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: AppSpacing.xxl),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [AppSectionTitle(title), ...children],
     ),
   );
 }
 
 class _DataRow extends StatelessWidget {
-  const _DataRow(this.label, this.value);
+  const _DataRow(this.label, this.value, {this.alert = false});
   final String label;
   final String value;
+  final bool alert;
+
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 5),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(child: Text(label)),
-        const SizedBox(width: 16),
-        Flexible(
-          child: Text(
-            value,
-            textAlign: TextAlign.end,
-            style: const TextStyle(fontWeight: FontWeight.w600),
-          ),
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      constraints: const BoxConstraints(minHeight: 40),
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: theme.colorScheme.outlineVariant),
         ),
-      ],
-    ),
-  );
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.lg),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w500,
+                color: alert ? theme.colorScheme.error : null,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _HistorySection extends StatelessWidget {
@@ -407,158 +475,177 @@ class _HistorySection extends StatelessWidget {
   final bool loading;
   final String period;
   final ValueChanged<String?> onPeriodChanged;
+
   @override
-  Widget build(BuildContext context) => Card(
-    child: Padding(
-      padding: const EdgeInsets.all(18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.show_chart),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Histórico',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-              ),
-              DropdownButton<String>(
-                value: period,
-                items: const [
-                  DropdownMenuItem(value: '1h', child: Text('1 hora')),
-                  DropdownMenuItem(value: '6h', child: Text('6 horas')),
-                  DropdownMenuItem(value: '24h', child: Text('24 horas')),
-                  DropdownMenuItem(value: '7d', child: Text('7 dias')),
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: AppSpacing.xxl),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const AppSectionTitle('Histórico'),
+        SegmentedButton<String>(
+          showSelectedIcon: false,
+          segments: const [
+            ButtonSegment(value: '1h', label: Text('1 h')),
+            ButtonSegment(value: '6h', label: Text('6 h')),
+            ButtonSegment(value: '24h', label: Text('24 h')),
+            ButtonSegment(value: '7d', label: Text('7 d')),
+          ],
+          selected: {period},
+          onSelectionChanged: (value) => onPeriodChanged(value.first),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        if (loading)
+          const AppLoadingState(label: 'Carregando amostras…')
+        else if (history.isEmpty)
+          const AppEmptyState(
+            icon: Icons.show_chart,
+            title: 'Sem amostras',
+            message: 'Ainda não há amostras neste período.',
+          )
+        else
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final columns = constraints.maxWidth >= 560 ? 2 : 1;
+              final width =
+                  (constraints.maxWidth - AppSpacing.xl * (columns - 1)) /
+                  columns;
+              return Wrap(
+                spacing: AppSpacing.xl,
+                runSpacing: AppSpacing.lg,
+                children: [
+                  for (final (title, unit, values, limit) in [
+                    (
+                      'Temperatura',
+                      '°C',
+                      history.map((e) => e.cpuTemperatureCelsius).toList(),
+                      80.0,
+                    ),
+                    (
+                      'CPU',
+                      '%',
+                      history.map((e) => e.cpuUsagePercent).toList(),
+                      null,
+                    ),
+                    (
+                      'RAM',
+                      '%',
+                      history.map((e) => e.memoryUsagePercent).toList(),
+                      null,
+                    ),
+                    (
+                      'Disco',
+                      '%',
+                      history.map((e) => e.diskUsagePercent).toList(),
+                      null,
+                    ),
+                    (
+                      'Latência',
+                      ' ms',
+                      history.map((e) => e.backendLatencyMs).toList(),
+                      null,
+                    ),
+                    (
+                      'Sinal Wi-Fi',
+                      '%',
+                      history.map((e) => e.wifiSignalPercent).toList(),
+                      null,
+                    ),
+                  ])
+                    SizedBox(
+                      width: width,
+                      child: _Chart(
+                        title: title,
+                        unit: unit,
+                        values: values,
+                        limit: limit,
+                      ),
+                    ),
                 ],
-                onChanged: onPeriodChanged,
-              ),
-            ],
+              );
+            },
           ),
-          const SizedBox(height: 12),
-          if (loading)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.all(28),
-                child: CircularProgressIndicator(),
-              ),
-            )
-          else if (history.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(24),
-              child: Center(
-                child: Text('Ainda não há amostras neste período.'),
-              ),
-            )
-          else
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                _ChartCard(
-                  title: 'Temperatura',
-                  unit: '°C',
-                  values: history.map((e) => e.cpuTemperatureCelsius).toList(),
-                ),
-                _ChartCard(
-                  title: 'CPU',
-                  unit: '%',
-                  values: history.map((e) => e.cpuUsagePercent).toList(),
-                ),
-                _ChartCard(
-                  title: 'RAM',
-                  unit: '%',
-                  values: history.map((e) => e.memoryUsagePercent).toList(),
-                ),
-                _ChartCard(
-                  title: 'Disco',
-                  unit: '%',
-                  values: history.map((e) => e.diskUsagePercent).toList(),
-                ),
-                _ChartCard(
-                  title: 'Latência',
-                  unit: ' ms',
-                  values: history.map((e) => e.backendLatencyMs).toList(),
-                ),
-                _ChartCard(
-                  title: 'Sinal Wi-Fi',
-                  unit: '%',
-                  values: history.map((e) => e.wifiSignalPercent).toList(),
-                ),
-              ],
-            ),
-        ],
-      ),
+      ],
     ),
   );
 }
 
-class _ChartCard extends StatelessWidget {
-  const _ChartCard({
+class _Chart extends StatelessWidget {
+  const _Chart({
     required this.title,
     required this.unit,
     required this.values,
+    this.limit,
   });
   final String title;
   final String unit;
   final List<double?> values;
+  final double? limit;
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final available = values.whereType<double>().toList();
-    return SizedBox(
-      width: 310,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          border: Border.all(color: Theme.of(context).dividerColor),
-          borderRadius: BorderRadius.circular(12),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(child: Text(title, style: theme.textTheme.titleSmall)),
+            Text(
+              available.isEmpty
+                  ? '—'
+                  : '${available.last.toStringAsFixed(1)}$unit',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+          ],
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      title,
-                      style: const TextStyle(fontWeight: FontWeight.w600),
+        const SizedBox(height: AppSpacing.sm),
+        SizedBox(
+          height: 96,
+          child: available.isEmpty
+              ? Center(
+                  child: Text(
+                    'Indisponível',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
-                  Text(
-                    available.isEmpty
-                        ? '—'
-                        : '${available.last.toStringAsFixed(1)}$unit',
+                )
+              : CustomPaint(
+                  key: ValueKey('chart-$title'),
+                  painter: _LineChartPainter(
+                    values: values,
+                    color: theme.colorScheme.primary,
+                    grid: theme.colorScheme.outlineVariant,
+                    limitColor: theme.colorScheme.error,
+                    limit: limit,
                   ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                height: 100,
-                child: available.isEmpty
-                    ? const Center(child: Text('Indisponível'))
-                    : CustomPaint(
-                        key: ValueKey('chart-$title'),
-                        painter: _LineChartPainter(
-                          values,
-                          Theme.of(context).colorScheme.primary,
-                        ),
-                        size: const Size(double.infinity, 100),
-                      ),
-              ),
-            ],
-          ),
+                  size: const Size(double.infinity, 96),
+                ),
         ),
-      ),
+      ],
     );
   }
 }
 
 class _LineChartPainter extends CustomPainter {
-  _LineChartPainter(this.values, this.color);
+  _LineChartPainter({
+    required this.values,
+    required this.color,
+    required this.grid,
+    required this.limitColor,
+    this.limit,
+  });
   final List<double?> values;
   final Color color;
+  final Color grid;
+  final Color limitColor;
+  final double? limit;
+
   @override
   void paint(Canvas canvas, Size size) {
     final points = <({int index, double value})>[];
@@ -568,19 +655,31 @@ class _LineChartPainter extends CustomPainter {
       }
     }
     if (points.isEmpty) return;
-    final minValue = points.map((e) => e.value).reduce(math.min);
-    final maxValue = points.map((e) => e.value).reduce(math.max);
+    var minValue = points.map((e) => e.value).reduce(math.min);
+    var maxValue = points.map((e) => e.value).reduce(math.max);
+    if (limit != null && limit! <= maxValue * 1.25) {
+      maxValue = math.max(maxValue, limit!);
+      minValue = math.min(minValue, limit!);
+    }
     final range = math.max(1.0, maxValue - minValue);
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 2.2
-      ..style = PaintingStyle.stroke;
-    final grid = Paint()
-      ..color = color.withValues(alpha: 0.12)
+    double yOf(double value) =>
+        size.height - ((value - minValue) / range * (size.height - 4)) - 2;
+
+    final gridPaint = Paint()
+      ..color = grid
       ..strokeWidth = 1;
-    for (var row = 0; row <= 4; row++) {
-      final y = size.height * row / 4;
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), grid);
+    for (var row = 0; row <= 3; row++) {
+      final y = (size.height - 1) * row / 3;
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+    }
+    if (limit != null && limit! >= minValue && limit! <= maxValue) {
+      final y = yOf(limit!);
+      final limitPaint = Paint()
+        ..color = limitColor
+        ..strokeWidth = 1;
+      for (var x = 0.0; x < size.width; x += 6) {
+        canvas.drawLine(Offset(x, y), Offset(x + 3, y), limitPaint);
+      }
     }
     final path = Path();
     for (var position = 0; position < points.length; position++) {
@@ -588,51 +687,73 @@ class _LineChartPainter extends CustomPainter {
       final x = values.length <= 1
           ? 0.0
           : size.width * point.index / (values.length - 1);
-      final y = size.height - ((point.value - minValue) / range * size.height);
+      final y = yOf(point.value);
       if (position == 0) {
         path.moveTo(x, y);
       } else {
         path.lineTo(x, y);
       }
     }
-    canvas.drawPath(path, paint);
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = color
+        ..strokeWidth = 2
+        ..strokeJoin = StrokeJoin.round
+        ..style = PaintingStyle.stroke,
+    );
   }
 
   @override
   bool shouldRepaint(covariant _LineChartPainter oldDelegate) =>
-      oldDelegate.values != values || oldDelegate.color != color;
+      oldDelegate.values != values ||
+      oldDelegate.color != color ||
+      oldDelegate.limit != limit;
 }
 
 class _AlertsSection extends StatelessWidget {
   const _AlertsSection({required this.alerts});
   final List<TelemetryAlert> alerts;
+
   @override
-  Widget build(BuildContext context) => _Section(
-    title: 'Alertas',
-    icon: Icons.notifications_active_outlined,
-    children: alerts.isEmpty
-        ? const [Text('Nenhum alerta registrado.')]
-        : alerts
-              .map(
-                (alert) => ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(
-                    alert.status == 'ACTIVE'
-                        ? Icons.warning_amber
-                        : Icons.check_circle,
-                    color: alert.status == 'ACTIVE'
-                        ? Colors.orange.shade800
-                        : Colors.green.shade700,
-                  ),
-                  title: Text(alert.message),
-                  subtitle: Text(
-                    '${alert.type.replaceAll('_', ' ')} • ${alert.status == 'ACTIVE' ? 'Ativo' : 'Resolvido'}',
-                  ),
-                  trailing: Text(telemetryRelativeTime(alert.openedAt)),
-                ),
-              )
-              .toList(),
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const AppSectionTitle('Alertas'),
+      if (alerts.isEmpty)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+          child: Text(
+            'Nenhum alerta registrado.',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        )
+      else
+        for (final alert in alerts)
+          AppListRow(
+            dense: true,
+            muted: alert.status != 'ACTIVE',
+            title: alert.message,
+            meta:
+                '${_alertType(alert.type)} · ${telemetryRelativeTime(alert.openedAt)}',
+            trailing: alert.status == 'ACTIVE'
+                ? const AppStatusBadge(
+                    label: 'Ativo',
+                    tone: AppStatusTone.warning,
+                  )
+                : const AppStatusBadge(label: 'Resolvido'),
+          ),
+    ],
   );
+
+  static String _alertType(String type) {
+    final words = type.replaceAll('_', ' ').toLowerCase();
+    return words.isEmpty
+        ? words
+        : '${words[0].toUpperCase()}${words.substring(1)}';
+  }
 }
 
 String _yesNo(bool? value) => value == null
@@ -649,13 +770,6 @@ String _websocket(String? value) => switch (value) {
   'CONNECTED' => 'Conectado',
   'RECONNECTING' => 'Reconectando',
   'DISCONNECTED' => 'Desconectado',
-  _ => 'Indisponível',
-};
-String _friendlySignal(String? value) => switch (value) {
-  'EXCELENTE' => 'Excelente',
-  'BOM' => 'Bom',
-  'MEDIO' => 'Médio',
-  'FRACO' => 'Fraco',
   _ => 'Indisponível',
 };
 String _number(num? value, String suffix) =>

@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme/app_tokens.dart';
+import '../../core/widgets/app_content.dart';
+import '../../core/widgets/async_state.dart';
+import '../../core/widgets/status_badge.dart';
 import '../model/produto.dart';
 import '../model/produto_repository.dart';
 import 'scanner_page.dart';
@@ -63,39 +67,48 @@ class _BuscarProdutoState extends State<BuscarProduto> {
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Buscar produto')),
     body: ListView(
-      padding: const EdgeInsets.all(16),
       children: [
-        TextField(
-          controller: _codigo,
-          decoration: InputDecoration(
-            labelText: 'SKU ou código de barras',
-            suffixIcon: IconButton(
-              onPressed: _scan,
-              icon: const Icon(Icons.qr_code_scanner),
-            ),
+        AppContent(
+          maxWidth: AppLayout.formMaxWidth,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(
+                controller: _codigo,
+                autofocus: true,
+                textInputAction: TextInputAction.search,
+                decoration: InputDecoration(
+                  labelText: 'SKU ou código de barras',
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: IconButton(
+                    tooltip: 'Ler com a câmera',
+                    onPressed: _scan,
+                    icon: const Icon(Icons.qr_code_scanner),
+                  ),
+                ),
+                onSubmitted: _buscar,
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              Align(
+                alignment: Alignment.centerRight,
+                child: FilledButton(
+                  onPressed: _loading ? null : () => _buscar(_codigo.text),
+                  child: const Text('Buscar'),
+                ),
+              ),
+              if (_loading) const AppLoadingState(label: 'Buscando produto…'),
+              if (_error != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: AppSpacing.xl),
+                  child: AppBanner(
+                    tone: AppStatusTone.critical,
+                    message: _error!,
+                  ),
+                ),
+              if (_produto != null) _ProductDetails(product: _produto!),
+            ],
           ),
-          onSubmitted: _buscar,
         ),
-        const SizedBox(height: 12),
-        FilledButton(
-          onPressed: _loading ? null : () => _buscar(_codigo.text),
-          child: const Text('BUSCAR'),
-        ),
-        if (_loading)
-          const Padding(
-            padding: EdgeInsets.all(32),
-            child: Center(child: CircularProgressIndicator()),
-          ),
-        if (_error != null)
-          Padding(
-            padding: const EdgeInsets.all(24),
-            child: Text(
-              _error!,
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
-            ),
-          ),
-        if (_produto != null) _ProductDetails(product: _produto!),
       ],
     ),
   );
@@ -106,35 +119,57 @@ class _ProductDetails extends StatelessWidget {
   final Produto product;
 
   @override
-  Widget build(BuildContext context) => Card(
-    margin: const EdgeInsets.only(top: 20),
-    child: Padding(
-      padding: const EdgeInsets.all(16),
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.xxl),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(product.nome, style: Theme.of(context).textTheme.titleLarge),
+          Row(
+            children: [
+              Expanded(
+                child: Text(product.nome, style: theme.textTheme.titleLarge),
+              ),
+              AppStatusBadge(
+                label: product.ativo ? 'Ativo' : 'Inativo',
+                tone: product.ativo
+                    ? AppStatusTone.success
+                    : AppStatusTone.neutral,
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xs),
           Text(
             product.preco.currency,
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const Divider(),
-          Text('SKU: ${product.codigoInterno}'),
-          Text('Categoria: ${product.categoria}'),
-          Text('Unidade: ${product.unidadeMedida}'),
-          Text('Status: ${product.ativo ? "ATIVO" : "INATIVO"}'),
-          const SizedBox(height: 8),
-          const Text(
-            'Códigos de barras',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          ...product.codigosBarras.map(
-            (code) => Text(
-              '${code.codigo} • ${code.tipo}${code.principal ? " • Principal" : ""}',
+            style: theme.textTheme.headlineMedium?.copyWith(
+              fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),
+          const SizedBox(height: AppSpacing.xl),
+          AppKeyValueGrid(
+            entries: [
+              ('SKU', product.codigoInterno),
+              ('Categoria', product.categoria),
+              ('Unidade', product.unidadeMedida),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xxl),
+          const AppSectionTitle('Códigos de barras'),
+          for (final code in product.codigosBarras)
+            AppListRow(
+              dense: true,
+              title: code.codigo,
+              meta: code.tipo,
+              trailing: code.principal
+                  ? const AppStatusBadge(
+                      label: 'Principal',
+                      tone: AppStatusTone.info,
+                    )
+                  : null,
+            ),
         ],
       ),
-    ),
-  );
+    );
+  }
 }

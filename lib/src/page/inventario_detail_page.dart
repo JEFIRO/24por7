@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme/app_theme.dart';
+import '../../core/theme/app_tokens.dart';
+import '../../core/widgets/app_content.dart';
+import '../../core/widgets/async_state.dart';
+import '../../core/widgets/status_badge.dart';
 import '../model/decimal_value.dart';
 import '../model/inventario.dart';
 import '../model/inventario_repository.dart';
+import 'inventario_list_page.dart';
 
 class InventarioDetailPage extends StatefulWidget {
   const InventarioDetailPage({
@@ -57,40 +63,55 @@ class _InventarioDetailPageState extends State<InventarioDetailPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(item.nome),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('SKU: ${item.codigoInterno}'),
-            if (item.localizacaoPlanograma != null)
-              Text('Local: ${item.localizacaoPlanograma}'),
-            const SizedBox(height: 12),
-            TextField(
-              controller: quantidade,
-              autofocus: true,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-                signed: true,
+        content: SizedBox(
+          width: 400,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                [
+                  'SKU ${item.codigoInterno}',
+                  if (item.localizacaoPlanograma != null)
+                    item.localizacaoPlanograma!,
+                ].join(' · '),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
-              decoration: const InputDecoration(
-                labelText: 'Quantidade contada',
-                border: OutlineInputBorder(),
+              const SizedBox(height: AppSpacing.lg),
+              TextField(
+                controller: quantidade,
+                autofocus: true,
+                style: tabularFigures,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                  signed: true,
+                ),
+                decoration: InputDecoration(
+                  labelText: 'Quantidade contada',
+                  helperText: 'Até 3 casas decimais',
+                  suffixText: item.unidadeMedida,
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: motivo,
-              decoration: const InputDecoration(labelText: 'Motivo/observação'),
-            ),
-          ],
+              const SizedBox(height: AppSpacing.md),
+              TextField(
+                controller: motivo,
+                decoration: const InputDecoration(
+                  labelText: 'Observação (opcional)',
+                ),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('CANCELAR'),
+            child: const Text('Cancelar'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('CONFIRMAR CONTAGEM'),
+            child: const Text('Confirmar contagem'),
           ),
         ],
       ),
@@ -160,142 +181,266 @@ class _InventarioDetailPageState extends State<InventarioDetailPage> {
     }).toList();
   }
 
+  static const _filtros = <String, String>{
+    'TODOS': 'Todos',
+    'PENDENTES': 'Pendentes',
+    'OK': 'Conferidos',
+    'FALTAS': 'Faltas',
+    'SOBRAS': 'Sobras',
+    'CONFLITOS': 'Conflitos',
+  };
+
+  int _count(String filtro) {
+    final items = _inventario?.itens ?? const <InventarioItem>[];
+    return switch (filtro) {
+      'TODOS' => items.length,
+      'PENDENTES' => items.where((i) => i.quantidadeContada == null).length,
+      _ =>
+        items
+            .where(
+              (i) =>
+                  i.status ==
+                  (filtro.endsWith('S')
+                      ? filtro.substring(0, filtro.length - 1)
+                      : filtro),
+            )
+            .length,
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     final inventario = _inventario;
+    final open =
+        inventario != null &&
+        inventario.status != 'FINALIZADO' &&
+        inventario.status != 'CANCELADO';
+    final mobile = AppBreakpoints.isMobile(context);
+    final actions = open
+        ? [
+            OutlinedButton(
+              onPressed: _saving ? null : () => _acao(false),
+              child: const Text('Cancelar inventário'),
+            ),
+            FilledButton(
+              onPressed: _saving || inventario.pendentes > 0
+                  ? null
+                  : () => _acao(true),
+              child: Text(_saving ? 'Aguarde…' : 'Finalizar'),
+            ),
+          ]
+        : <Widget>[];
     return Scaffold(
-      appBar: AppBar(title: const Text('Contagem do inventário')),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-          ? Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(_error!),
-                  TextButton(
-                    onPressed: _carregar,
-                    child: const Text('TENTAR NOVAMENTE'),
-                  ),
-                ],
+      appBar: AppBar(
+        title: const Text('Contagem do inventário'),
+        actions: mobile || actions.isEmpty
+            ? null
+            : [
+                ...actions.expand(
+                  (w) => [w, const SizedBox(width: AppSpacing.sm)],
+                ),
+                const SizedBox(width: AppSpacing.sm),
+              ],
+      ),
+      bottomNavigationBar: mobile && actions.isNotEmpty
+          ? SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                child: Row(
+                  children: [
+                    Expanded(child: actions[0]),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(child: actions[1]),
+                  ],
+                ),
               ),
             )
+          : null,
+      body: _loading
+          ? const AppLoadingState(label: 'Carregando inventário…')
+          : _error != null
+          ? AppErrorState(message: _error!, onRetry: _carregar)
           : inventario == null
-          ? const Center(child: Text('Inventário não encontrado'))
-          : Column(
+          ? const AppEmptyState(
+              icon: Icons.search_off,
+              title: 'Inventário não encontrado',
+              message: 'Ele pode ter sido removido. Volte à lista.',
+            )
+          : ListView(
               children: [
-                _Resumo(inventario),
-                if (inventario.status == 'COM_CONFLITO')
-                  const MaterialBanner(
-                    content: Text(
-                      'O estoque mudou durante a contagem. Reconte os itens marcados como conflito.',
-                    ),
-                    actions: [SizedBox.shrink()],
-                  ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-                  child: TextField(
-                    onChanged: (value) => setState(() => _busca = value),
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.search),
-                      hintText: 'Nome, SKU ou código de barras',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                ),
-                SizedBox(
-                  height: 48,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    children:
-                        [
-                              'TODOS',
-                              'PENDENTES',
-                              'OK',
-                              'FALTAS',
-                              'SOBRAS',
-                              'CONFLITOS',
-                            ]
-                            .map(
-                              (f) => Padding(
-                                padding: const EdgeInsets.only(right: 6),
-                                child: ChoiceChip(
-                                  label: Text(f),
-                                  selected: _filtro == f,
-                                  onSelected: (_) =>
-                                      setState(() => _filtro = f),
-                                ),
-                              ),
-                            )
-                            .toList(),
-                  ),
-                ),
-                Expanded(
-                  child: ListView.builder(
-                    itemCount: _filtrados.length,
-                    itemBuilder: (context, index) {
-                      final item = _filtrados[index];
-                      return Card(
-                        margin: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 4,
+                AppContent(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _Resumo(inventario),
+                      if (inventario.status == 'COM_CONFLITO') ...[
+                        const SizedBox(height: AppSpacing.lg),
+                        const AppBanner(
+                          tone: AppStatusTone.critical,
+                          message:
+                              'O estoque mudou durante a contagem. Reconte os itens marcados como conflito.',
                         ),
-                        child: ListTile(
-                          title: Text(item.nome),
-                          subtitle: Text(
-                            [
-                              'SKU: ${item.codigoInterno}',
-                              if (item.localizacaoPlanograma != null)
-                                'Local: ${item.localizacaoPlanograma}',
-                              if (item.saldoSistemaSnapshot != null)
-                                'Sistema: ${item.saldoSistemaSnapshot!.normalized}',
-                              'Contado: ${item.quantidadeContada?.normalized ?? "pendente"}',
-                              if (item.diferenca != null)
-                                'Diferença: ${item.diferenca!.normalized}',
-                            ].join('\n'),
-                          ),
-                          isThreeLine: true,
-                          trailing: Chip(label: Text(item.status)),
-                          onTap:
-                              inventario.status == 'FINALIZADO' ||
-                                  inventario.status == 'CANCELADO' ||
-                                  item.ajusteAplicado
-                              ? null
-                              : () => _contar(item),
+                      ],
+                      const SizedBox(height: AppSpacing.xl),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 520),
+                        child: AppSearchField(
+                          hintText: 'Nome, SKU ou código de barras',
+                          onChanged: (value) => setState(() => _busca = value),
                         ),
-                      );
-                    },
-                  ),
-                ),
-                if (inventario.status != 'FINALIZADO' &&
-                    inventario.status != 'CANCELADO')
-                  SafeArea(
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Row(
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      Wrap(
+                        spacing: AppSpacing.sm,
+                        runSpacing: AppSpacing.sm,
                         children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: _saving ? null : () => _acao(false),
-                              child: const Text('CANCELAR'),
+                          for (final entry in _filtros.entries)
+                            ChoiceChip(
+                              label: Text(
+                                '${entry.value} ${_count(entry.key)}',
+                              ),
+                              selected: _filtro == entry.key,
+                              onSelected: (_) =>
+                                  setState(() => _filtro = entry.key),
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: FilledButton(
-                              onPressed: _saving || inventario.pendentes > 0
-                                  ? null
-                                  : () => _acao(true),
-                              child: Text(_saving ? 'AGUARDE...' : 'FINALIZAR'),
-                            ),
-                          ),
                         ],
                       ),
-                    ),
+                      const SizedBox(height: AppSpacing.lg),
+                      if (_filtrados.isEmpty)
+                        const AppEmptyState(
+                          icon: Icons.filter_alt_off_outlined,
+                          title: 'Nenhum item neste filtro',
+                          message: 'Escolha outro filtro ou limpe a busca.',
+                        )
+                      else if (mobile)
+                        for (final item in _filtrados)
+                          AppListRow(
+                            title: item.nome,
+                            meta: [
+                              'SKU ${item.codigoInterno}',
+                              'Contado: ${item.quantidadeContada?.fixedScale(3).replaceAll('.', ',') ?? 'pendente'}',
+                            ].join(' · '),
+                            trailing: _itemBadge(item),
+                            onTap: _canCount(inventario, item)
+                                ? () => _contar(item)
+                                : null,
+                          )
+                      else
+                        _table(inventario),
+                    ],
                   ),
+                ),
               ],
             ),
+    );
+  }
+
+  bool _canCount(Inventario inventario, InventarioItem item) =>
+      inventario.status != 'FINALIZADO' &&
+      inventario.status != 'CANCELADO' &&
+      !item.ajusteAplicado;
+
+  Widget _table(Inventario inventario) {
+    final theme = Theme.of(context);
+    final muted = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+    String qty(DecimalValue? value) =>
+        value?.fixedScale(3).replaceAll('.', ',') ?? '—';
+    return AppTable(
+      columns: const [
+        DataColumn(label: Text('Produto')),
+        DataColumn(label: Text('Localização')),
+        DataColumn(label: Text('Sistema'), numeric: true),
+        DataColumn(label: Text('Contado'), numeric: true),
+        DataColumn(label: Text('Diferença'), numeric: true),
+        DataColumn(label: Text('Situação')),
+      ],
+      rows: [
+        for (final item in _filtrados)
+          DataRow(
+            onSelectChanged: _canCount(inventario, item)
+                ? (_) => _contar(item)
+                : null,
+            cells: [
+              DataCell(
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(item.nome, style: theme.textTheme.titleSmall),
+                    Text('SKU ${item.codigoInterno}', style: muted),
+                  ],
+                ),
+              ),
+              DataCell(
+                Text(
+                  item.localizacaoPlanograma ?? '—',
+                  style: item.localizacaoPlanograma == null ? muted : null,
+                ),
+              ),
+              DataCell(
+                Text(
+                  inventario.contagemCega && item.quantidadeContada == null
+                      ? '—'
+                      : qty(item.saldoSistemaSnapshot),
+                  style: tabularFigures,
+                ),
+              ),
+              DataCell(
+                Text(
+                  qty(item.quantidadeContada),
+                  style: tabularFigures.copyWith(fontWeight: FontWeight.w600),
+                ),
+              ),
+              DataCell(_Difference(item.diferenca)),
+              DataCell(_itemBadge(item)),
+            ],
+          ),
+      ],
+    );
+  }
+
+  static AppStatusBadge _itemBadge(InventarioItem item) {
+    if (item.quantidadeContada == null) {
+      return const AppStatusBadge(label: 'Pendente');
+    }
+    return switch (item.status) {
+      'OK' => const AppStatusBadge(
+        label: 'Conferido',
+        tone: AppStatusTone.success,
+      ),
+      'FALTA' => const AppStatusBadge(
+        label: 'Falta',
+        tone: AppStatusTone.warning,
+      ),
+      'SOBRA' => const AppStatusBadge(label: 'Sobra', tone: AppStatusTone.info),
+      'CONFLITO' => const AppStatusBadge(
+        label: 'Conflito',
+        tone: AppStatusTone.critical,
+      ),
+      final other => AppStatusBadge(label: other.toLowerCase()),
+    };
+  }
+}
+
+class _Difference extends StatelessWidget {
+  const _Difference(this.value);
+  final DecimalValue? value;
+
+  @override
+  Widget build(BuildContext context) {
+    final value = this.value;
+    if (value == null) return const Text('—');
+    final text = value.fixedScale(3).replaceAll('.', ',');
+    final color = value.isNegative
+        ? Theme.of(context).colorScheme.error
+        : value.isPositive
+        ? AppThemeColors.of(context).success
+        : null;
+    return Text(
+      value.isPositive ? '+$text' : text,
+      style: tabularFigures.copyWith(color: color, fontWeight: FontWeight.w600),
     );
   }
 }
@@ -303,32 +448,57 @@ class _InventarioDetailPageState extends State<InventarioDetailPage> {
 class _Resumo extends StatelessWidget {
   const _Resumo(this.inventario);
   final Inventario inventario;
+
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.all(12),
-    child: Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final progress = inventario.totalProdutos == 0
+        ? 1.0
+        : inventario.contados / inventario.totalProdutos;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: AppSpacing.md,
+          runSpacing: AppSpacing.sm,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             Text(
-              inventario.localNome,
-              style: Theme.of(context).textTheme.titleLarge,
+              inventario.descricao ?? inventario.localNome,
+              style: theme.textTheme.headlineMedium,
             ),
-            const SizedBox(height: 8),
-            LinearProgressIndicator(
-              value: inventario.totalProdutos == 0
-                  ? 1
-                  : inventario.contados / inventario.totalProdutos,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '${inventario.contados} contados • ${inventario.pendentes} pendentes • ${inventario.divergencias} divergências • ${inventario.conflitos} conflitos',
-            ),
+            inventoryStatusBadge(inventario.status),
           ],
         ),
-      ),
-    ),
-  );
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          '${inventario.localNome} · ${inventario.contagemCega ? 'Contagem cega' : 'Contagem aberta'}',
+          style: theme.textTheme.bodyLarge?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${inventario.contados} de ${inventario.totalProdutos} contados · '
+                '${inventario.divergencias} divergências · ${inventario.conflitos} conflitos',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(2),
+                child: LinearProgressIndicator(value: progress, minHeight: 4),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 }

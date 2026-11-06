@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../core/formatters/app_formatters.dart';
 import '../../core/formatters/app_time.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/theme/app_tokens.dart';
-import '../../core/theme/branding_config.dart';
 import '../../core/widgets/app_content.dart';
 import '../../core/widgets/async_state.dart';
 import '../../core/widgets/status_badge.dart';
@@ -52,76 +52,67 @@ class _DashboardPageState extends State<DashboardPage> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Dashboard operacional')),
-        body: const AppLoadingState(
-          key: Key('dashboard-loading'),
-          label: 'Carregando indicadores da empresa…',
-        ),
+      return const AppLoadingState(
+        key: Key('dashboard-loading'),
+        label: 'Carregando indicadores da empresa…',
       );
     }
     if (_error != null || _dashboard == null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Dashboard operacional')),
-        body: AppErrorState(
-          key: const Key('dashboard-error'),
-          message: _error ?? 'Dados indisponíveis',
-          onRetry: _load,
-        ),
+      return AppErrorState(
+        key: const Key('dashboard-error'),
+        message: _error ?? 'Dados indisponíveis',
+        onRetry: _load,
       );
     }
     final dashboard = _dashboard!;
-    return Scaffold(
-      appBar: AppBar(title: const Text('Dashboard operacional')),
-      body: RefreshIndicator(
-        onRefresh: _load,
-        child: SingleChildScrollView(
-          key: const Key('dashboard-content'),
-          physics: const AlwaysScrollableScrollPhysics(),
-          child: AppContent(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _DashboardHeader(dashboard: dashboard, onRefresh: _load),
-                const SizedBox(height: AppSpacing.xl),
-                _KpiGrid(dashboard: dashboard, onNavigate: _navigate),
-                const SizedBox(height: AppSpacing.section),
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final checklist = _ChecklistCard(
-                      onboarding: dashboard.onboarding,
-                      onNavigate: _navigate,
-                    );
-                    final attention = _AttentionCard(
-                      dashboard: dashboard,
-                      onNavigate: _navigate,
-                    );
-                    if (constraints.maxWidth < 900) {
-                      return Column(
-                        children: [
-                          checklist,
-                          const SizedBox(height: AppSpacing.lg),
-                          attention,
-                        ],
-                      );
-                    }
-                    return Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: SingleChildScrollView(
+        key: const Key('dashboard-content'),
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: AppContent(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _DashboardHeader(dashboard: dashboard, onRefresh: _load),
+              const SizedBox(height: AppSpacing.xl),
+              _Kpis(dashboard: dashboard, onNavigate: _navigate),
+              const SizedBox(height: AppSpacing.section),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final attention = _Attention(
+                    dashboard: dashboard,
+                    onNavigate: _navigate,
+                  );
+                  final checklist = _Checklist(
+                    onboarding: dashboard.onboarding,
+                    onNavigate: _navigate,
+                  );
+                  if (constraints.maxWidth < 900) {
+                    return Column(
                       children: [
-                        Expanded(flex: 3, child: checklist),
-                        const SizedBox(width: AppSpacing.lg),
-                        Expanded(flex: 2, child: attention),
+                        attention,
+                        const SizedBox(height: AppSpacing.section),
+                        checklist,
                       ],
                     );
-                  },
-                ),
-                const SizedBox(height: AppSpacing.section),
-                _ActivityCard(
-                  activities: dashboard.atividadeRecente,
-                  onNavigate: _navigate,
-                ),
-              ],
-            ),
+                  }
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(flex: 13, child: attention),
+                      const SizedBox(width: AppSpacing.section),
+                      Expanded(flex: 10, child: checklist),
+                    ],
+                  );
+                },
+              ),
+              const SizedBox(height: AppSpacing.section),
+              _Activity(
+                activities: dashboard.atividadeRecente,
+                onNavigate: _navigate,
+              ),
+            ],
           ),
         ),
       ),
@@ -136,241 +127,208 @@ class _DashboardHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final branding = BrandingScope.of(context);
-    final logo = branding.logoUrl;
-    final brandInitial = branding.displayName.trim().isEmpty
-        ? 'A'
-        : branding.displayName.trim().characters.first.toUpperCase();
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Container(
-          width: 64,
-          height: 64,
-          padding: const EdgeInsets.all(AppSpacing.sm),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.primaryContainer,
-            borderRadius: BorderRadius.circular(AppRadius.lg),
-          ),
-          child: logo == null || logo.isEmpty
-              ? Center(
-                  child: Text(
-                    brandInitial,
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onPrimaryContainer,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                )
-              : Image.network(
-                  logo,
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, _, _) => Icon(
-                    Icons.storefront_outlined,
-                    color: Theme.of(context).colorScheme.onPrimaryContainer,
-                  ),
-                ),
+    final generated = dashboard.geradoEm;
+    final subtitle = [
+      dashboard.empresaNome,
+      if (generated != null) 'atualizado às ${AppFormatters.time(generated)}',
+    ].where((part) => part.isNotEmpty).join(' · ');
+    return AppPageHeader(
+      title: 'Olá, ${dashboard.usuarioNome}',
+      subtitle: subtitle.isEmpty ? null : subtitle,
+      onRefresh: onRefresh,
+    );
+  }
+}
+
+class _Kpis extends StatelessWidget {
+  const _Kpis({required this.dashboard, required this.onNavigate});
+  final AdminDashboard dashboard;
+  final ValueChanged<String> onNavigate;
+
+  @override
+  Widget build(BuildContext context) {
+    final vendas = dashboard.vendasHoje.quantidadeVendas;
+    final estoque = dashboard.estoque;
+    return AppKpiStrip(
+      items: [
+        AppKpi(
+          key: const Key('kpi-sales'),
+          label: 'Vendas hoje',
+          value: '$vendas',
+          help: vendas == 1 ? 'venda processada' : 'vendas processadas',
+          icon: Icons.receipt_long_outlined,
+          onTap: () => onNavigate('/vendas'),
         ),
-        const SizedBox(width: AppSpacing.lg),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Olá, ${dashboard.usuarioNome}',
-                style: Theme.of(context).textTheme.headlineMedium,
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                dashboard.empresaNome,
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
+        AppKpi(
+          key: const Key('kpi-revenue'),
+          label: 'Faturamento hoje',
+          value: AppFormatters.currencyText(
+            dashboard.vendasHoje.faturamento.persistence,
           ),
+          help:
+              'Ticket médio ${AppFormatters.currencyText(dashboard.vendasHoje.ticketMedio.persistence)}',
+          icon: Icons.payments_outlined,
+          onTap: () => onNavigate('/vendas'),
         ),
-        if (!AppBreakpoints.isMobile(context))
-          OutlinedButton.icon(
-            onPressed: onRefresh,
-            icon: const Icon(Icons.refresh),
-            label: const Text('Atualizar'),
-          )
-        else
-          IconButton(
-            tooltip: 'Atualizar indicadores',
-            onPressed: onRefresh,
-            icon: const Icon(Icons.refresh),
-          ),
+        AppKpi(
+          key: const Key('kpi-terminals'),
+          label: 'Terminais',
+          value: '${dashboard.terminais.online} online',
+          help:
+              '${dashboard.terminais.offline} offline de '
+              '${dashboard.terminais.total}',
+          icon: Icons.desktop_windows_outlined,
+          onTap: () => onNavigate('/terminais'),
+        ),
+        AppKpi(
+          key: const Key('kpi-alerts'),
+          label: 'Alertas',
+          value: '${dashboard.alertas.ativos} ativos',
+          help: dashboard.alertas.critical == 1
+              ? '1 crítico'
+              : '${dashboard.alertas.critical} críticos',
+          icon: Icons.notification_important_outlined,
+          tone: dashboard.alertas.critical > 0 ? AppStatusTone.critical : null,
+          onTap: () => onNavigate('/alertas'),
+        ),
+        AppKpi(
+          key: const Key('kpi-stock'),
+          label: 'Estoque baixo',
+          value: estoque.regraConfigurada
+              ? '${estoque.produtosBaixoEstoque ?? 0}'
+              : 'Não disponível',
+          help: estoque.regraConfigurada
+              ? 'Abaixo do mínimo configurado'
+              : 'Estoque mínimo ainda não definido',
+          icon: Icons.inventory_outlined,
+          onTap: () => onNavigate('/estoque'),
+        ),
+        AppKpi(
+          key: const Key('kpi-payments'),
+          label: 'Pagamentos',
+          value: '${dashboard.pagamentos.precisamAtencao}',
+          help: 'precisam de atenção',
+          icon: Icons.credit_card_off_outlined,
+          tone: dashboard.pagamentos.precisamAtencao > 0
+              ? AppStatusTone.warning
+              : null,
+          onTap: () => onNavigate('/pagamentos'),
+        ),
       ],
     );
   }
 }
 
-class _KpiGrid extends StatelessWidget {
-  const _KpiGrid({required this.dashboard, required this.onNavigate});
+class _Attention extends StatelessWidget {
+  const _Attention({required this.dashboard, required this.onNavigate});
   final AdminDashboard dashboard;
   final ValueChanged<String> onNavigate;
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) {
-      final columns = constraints.maxWidth >= 1120
-          ? 4
-          : constraints.maxWidth >= 560
-          ? 2
-          : 1;
-      final width =
-          (constraints.maxWidth - (columns - 1) * AppSpacing.lg) / columns;
-      return Wrap(
-        spacing: AppSpacing.lg,
-        runSpacing: AppSpacing.lg,
-        children: [
-          _KpiCard(
-            key: const Key('kpi-sales'),
-            width: width,
-            label: 'Vendas hoje',
-            value: '${dashboard.vendasHoje.quantidadeVendas}',
-            detail: dashboard.vendasHoje.quantidadeVendas == 1
-                ? 'venda processada'
-                : 'vendas processadas',
-            icon: Icons.receipt_long_outlined,
-            onTap: () => onNavigate('/vendas'),
+  Widget build(BuildContext context) {
+    final terminais = dashboard.terminais.comAlerta;
+    final pagamentos = dashboard.pagamentos.precisamAtencao;
+    final estoque = dashboard.estoque;
+    final baixo = estoque.produtosBaixoEstoque ?? 0;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const AppSectionTitle('Atenção operacional'),
+        AppListRow(
+          leading: const AppIconWell(Icons.desktop_windows_outlined),
+          title: 'Terminais com alerta',
+          meta: terminais == 0
+              ? 'Nenhum Terminal com alerta ativo'
+              : terminais == 1
+              ? '1 Terminal precisa de atenção'
+              : '$terminais Terminais precisam de atenção',
+          trailing: _rowEnd(
+            terminais == 0
+                ? const AppStatusBadge(
+                    label: 'Normal',
+                    tone: AppStatusTone.success,
+                  )
+                : AppStatusBadge(
+                    label: dashboard.alertas.critical > 0
+                        ? 'Crítico'
+                        : 'Atenção',
+                    tone: dashboard.alertas.critical > 0
+                        ? AppStatusTone.critical
+                        : AppStatusTone.warning,
+                  ),
           ),
-          _KpiCard(
-            key: const Key('kpi-revenue'),
-            width: width,
-            label: 'Faturamento hoje',
-            value: AppFormatters.currencyText(
-              dashboard.vendasHoje.faturamento.persistence,
-            ),
-            detail:
-                'Ticket médio ${AppFormatters.currencyText(dashboard.vendasHoje.ticketMedio.persistence)}',
-            icon: Icons.payments_outlined,
-            onTap: () => onNavigate('/vendas'),
-          ),
-          _KpiCard(
-            key: const Key('kpi-terminals'),
-            width: width,
-            label: 'Terminais',
-            value: '${dashboard.terminais.online} online',
-            detail:
-                '${dashboard.terminais.offline} offline de '
-                '${dashboard.terminais.total}',
-            icon: Icons.desktop_windows_outlined,
-            tone: dashboard.terminais.offline > 0
-                ? AppStatusTone.warning
-                : AppStatusTone.success,
-            onTap: () => onNavigate('/terminais'),
-          ),
-          _KpiCard(
-            key: const Key('kpi-alerts'),
-            width: width,
-            label: 'Alertas',
-            value: '${dashboard.alertas.ativos} ativos',
-            detail: '${dashboard.alertas.critical} críticos',
-            icon: Icons.notification_important_outlined,
-            tone: dashboard.alertas.critical > 0
-                ? AppStatusTone.critical
-                : AppStatusTone.info,
-            onTap: () => onNavigate('/alertas'),
-          ),
-          _KpiCard(
-            key: const Key('kpi-stock'),
-            width: width,
-            label: 'Estoque baixo',
-            value: dashboard.estoque.regraConfigurada
-                ? '${dashboard.estoque.produtosBaixoEstoque ?? 0} produtos'
-                : 'Não disponível',
-            detail: dashboard.estoque.regraConfigurada
-                ? 'Abaixo do mínimo configurado'
-                : 'Estoque mínimo ainda não definido',
-            icon: Icons.inventory_outlined,
-            tone: dashboard.estoque.regraConfigurada
-                ? AppStatusTone.warning
-                : AppStatusTone.neutral,
-            onTap: () => onNavigate('/estoque'),
-          ),
-          _KpiCard(
-            key: const Key('kpi-payments'),
-            width: width,
-            label: 'Pagamentos',
-            value: '${dashboard.pagamentos.precisamAtencao}',
-            detail: 'precisam de atenção',
-            icon: Icons.credit_card_off_outlined,
-            tone: dashboard.pagamentos.precisamAtencao > 0
-                ? AppStatusTone.warning
-                : AppStatusTone.success,
-            onTap: () => onNavigate('/pagamentos'),
-          ),
-        ],
-      );
-    },
-  );
-}
-
-class _KpiCard extends StatelessWidget {
-  const _KpiCard({
-    required this.width,
-    required this.label,
-    required this.value,
-    required this.detail,
-    required this.icon,
-    required this.onTap,
-    this.tone = AppStatusTone.info,
-    super.key,
-  });
-  final double width;
-  final String label;
-  final String value;
-  final String detail;
-  final IconData icon;
-  final VoidCallback onTap;
-  final AppStatusTone tone;
-
-  @override
-  Widget build(BuildContext context) => SizedBox(
-    width: width,
-    child: Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.xl),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(icon, color: Theme.of(context).colorScheme.primary),
-                  const Spacer(),
-                  AppStatusBadge(label: label, tone: tone),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              Text(value, style: Theme.of(context).textTheme.headlineMedium),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                detail,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
-          ),
+          onTap: () => onNavigate('/alertas'),
         ),
-      ),
-    ),
+        AppListRow(
+          leading: const AppIconWell(Icons.inventory_outlined),
+          title: 'Estoque baixo',
+          meta: !estoque.regraConfigurada
+              ? 'Defina o estoque mínimo para acompanhar'
+              : baixo == 1
+              ? '1 produto abaixo do mínimo'
+              : '$baixo produtos abaixo do mínimo',
+          trailing: _rowEnd(
+            !estoque.regraConfigurada
+                ? const AppStatusBadge(
+                    label: 'Regra pendente',
+                    tone: AppStatusTone.warning,
+                  )
+                : baixo == 0
+                ? const AppStatusBadge(
+                    label: 'Normal',
+                    tone: AppStatusTone.success,
+                  )
+                : const AppStatusBadge(
+                    label: 'Atenção',
+                    tone: AppStatusTone.warning,
+                  ),
+          ),
+          onTap: () => onNavigate('/estoque'),
+        ),
+        AppListRow(
+          leading: const AppIconWell(Icons.credit_card_off_outlined),
+          title: 'Pagamentos em atenção',
+          meta: pagamentos == 0
+              ? 'Nenhum pagamento pendente'
+              : pagamentos == 1
+              ? '1 pagamento aguardando ação'
+              : '$pagamentos pagamentos aguardando ação',
+          trailing: _rowEnd(
+            pagamentos == 0
+                ? const AppStatusBadge(
+                    label: 'Normal',
+                    tone: AppStatusTone.success,
+                  )
+                : const AppStatusBadge(
+                    label: 'Atenção',
+                    tone: AppStatusTone.warning,
+                  ),
+          ),
+          onTap: () => onNavigate('/pagamentos'),
+        ),
+      ],
+    );
+  }
+
+  Widget _rowEnd(Widget badge) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      badge,
+      const SizedBox(width: AppSpacing.xs),
+      const Icon(Icons.chevron_right),
+    ],
   );
 }
 
-class _ChecklistCard extends StatelessWidget {
-  const _ChecklistCard({required this.onboarding, required this.onNavigate});
+class _Checklist extends StatelessWidget {
+  const _Checklist({required this.onboarding, required this.onNavigate});
   final AdminOnboardingStatus onboarding;
   final ValueChanged<String> onNavigate;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final items = <(String, bool, String)>[
       ('Empresa cadastrada', onboarding.empresaCadastrada, '/onboarding'),
       (
@@ -392,165 +350,119 @@ class _ChecklistCard extends StatelessWidget {
         '/produtos',
       ),
     ];
-    return Card(
+    final done = items.where((item) => item.$2).length;
+    final progress = done / items.length;
+    return Column(
       key: const Key('onboarding-checklist'),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const AppSectionTitle('Configuração do sistema'),
+        const SizedBox(height: AppSpacing.xs),
+        Row(
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.xl,
-                AppSpacing.lg,
-                AppSpacing.xl,
-                AppSpacing.sm,
-              ),
+            Expanded(
               child: Text(
-                'Configuração do sistema',
-                style: Theme.of(context).textTheme.titleLarge,
+                '$done de ${items.length} concluídos',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
               ),
             ),
-            for (var index = 0; index < items.length; index++) ...[
-              ListTile(
-                leading: Icon(
-                  items[index].$2
-                      ? Icons.check_circle
-                      : Icons.radio_button_unchecked,
-                  color: items[index].$2
-                      ? Theme.of(context).colorScheme.primary
-                      : Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-                title: Text(items[index].$1),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => onNavigate(items[index].$3),
+            Text(
+              '${(progress * 100).round()}%',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
               ),
-              if (index != items.length - 1)
-                const Divider(height: 1, indent: 56),
-            ],
+            ),
           ],
         ),
-      ),
+        const SizedBox(height: AppSpacing.xs),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(2),
+          child: LinearProgressIndicator(value: progress, minHeight: 4),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        for (final (label, ok, route) in items)
+          InkWell(
+            onTap: () => onNavigate(route),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 44),
+              child: Row(
+                children: [
+                  Icon(
+                    ok ? Icons.check_circle : Icons.radio_button_unchecked,
+                    size: 20,
+                    color: ok
+                        ? AppThemeColors.of(context).success
+                        : scheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Text(
+                      label,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: ok ? scheme.onSurface : scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  if (!ok)
+                    Text(
+                      'Configurar',
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: scheme.primary,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
 
-class _AttentionCard extends StatelessWidget {
-  const _AttentionCard({required this.dashboard, required this.onNavigate});
-  final AdminDashboard dashboard;
-  final ValueChanged<String> onNavigate;
-
-  @override
-  Widget build(BuildContext context) => Card(
-    child: Padding(
-      padding: const EdgeInsets.all(AppSpacing.xl),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Atenção operacional',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          _AttentionRow(
-            icon: Icons.inventory_outlined,
-            title: 'Estoque baixo',
-            value: dashboard.estoque.regraConfigurada
-                ? '${dashboard.estoque.produtosBaixoEstoque ?? 0}'
-                : 'Regra pendente',
-            onTap: () => onNavigate('/estoque'),
-          ),
-          const Divider(),
-          _AttentionRow(
-            icon: Icons.credit_card_off_outlined,
-            title: 'Pagamentos em atenção',
-            value: '${dashboard.pagamentos.precisamAtencao}',
-            onTap: () => onNavigate('/pagamentos'),
-          ),
-          const Divider(),
-          _AttentionRow(
-            icon: Icons.warning_amber_outlined,
-            title: 'Terminais com alerta',
-            value: '${dashboard.terminais.comAlerta}',
-            onTap: () => onNavigate('/alertas'),
-          ),
-        ],
-      ),
-    ),
-  );
-}
-
-class _AttentionRow extends StatelessWidget {
-  const _AttentionRow({
-    required this.icon,
-    required this.title,
-    required this.value,
-    required this.onTap,
-  });
-  final IconData icon;
-  final String title;
-  final String value;
-  final VoidCallback onTap;
-  @override
-  Widget build(BuildContext context) => ListTile(
-    contentPadding: EdgeInsets.zero,
-    leading: Icon(icon),
-    title: Text(title),
-    trailing: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [Text(value), const Icon(Icons.chevron_right)],
-    ),
-    onTap: onTap,
-  );
-}
-
-class _ActivityCard extends StatelessWidget {
-  const _ActivityCard({required this.activities, required this.onNavigate});
+class _Activity extends StatelessWidget {
+  const _Activity({required this.activities, required this.onNavigate});
   final List<AdminActivity> activities;
   final ValueChanged<String> onNavigate;
 
   @override
-  Widget build(BuildContext context) => Card(
-    key: const Key('recent-activity'),
-    child: Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(AppSpacing.xl),
-            child: Text(
-              'Atividade recente',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-          ),
-          if (activities.isEmpty)
-            const ListTile(
-              leading: Icon(Icons.history_toggle_off_outlined),
-              title: Text('Nenhuma atividade administrativa recente'),
-            )
-          else
-            for (var index = 0; index < activities.length; index++) ...[
-              ListTile(
-                leading: SizedBox(
-                  width: 52,
-                  child: Text(
-                    _time(activities[index].ocorridoEm),
-                    style: Theme.of(context).textTheme.labelLarge,
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      key: const Key('recent-activity'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const AppSectionTitle('Atividade recente'),
+        if (activities.isEmpty)
+          const AppEmptyState(
+            icon: Icons.history_toggle_off_outlined,
+            title: 'Nenhuma atividade administrativa recente',
+            message:
+                'Cadastros, ajustes de estoque e mudanças de configuração aparecem aqui.',
+          )
+        else
+          for (final activity in activities)
+            AppListRow(
+              leading: SizedBox(
+                width: 48,
+                child: Text(
+                  _time(activity.ocorridoEm),
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontFeatures: const [FontFeature.tabularFigures()],
                   ),
                 ),
-                title: Text(activities[index].titulo),
-                subtitle: Text(activities[index].descricao),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => onNavigate(activities[index].destino),
               ),
-              if (index != activities.length - 1)
-                const Divider(height: 1, indent: 76),
-            ],
-        ],
-      ),
-    ),
-  );
+              title: activity.titulo,
+              meta: activity.descricao,
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => onNavigate(activity.destino),
+            ),
+      ],
+    );
+  }
 
   static String _time(DateTime? value) {
     if (value == null) return '--:--';

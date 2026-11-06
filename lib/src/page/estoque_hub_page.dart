@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/widgets/app_content.dart';
 import 'estoque_central_page.dart';
 import 'estoque_condominio_page.dart';
 import 'inventario_list_page.dart';
@@ -9,72 +10,80 @@ import 'transferencia_estoque_page.dart';
 
 class EstoqueHubPage extends StatelessWidget {
   const EstoqueHubPage({super.key});
+
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Estoque')),
-    body: ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        _item(
-          context,
-          'Inventários',
-          'Contagem física, divergências e conflitos',
-          Icons.fact_check,
-          const InventarioListPage(),
+  Widget build(BuildContext context) => ListView(
+    children: [
+      AppContent(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const AppPageHeader(
+              title: 'Estoque',
+              subtitle:
+                  'Saldo central da Empresa, mercados dos Condomínios e a trilha de cada movimentação.',
+            ),
+            const SizedBox(height: 24),
+            _item(
+              context,
+              'Estoque central',
+              'Saldo físico da Empresa, entradas, saídas e ajustes',
+              Icons.warehouse_outlined,
+              const EstoqueCentralPage(),
+            ),
+            _item(
+              context,
+              'Estoque dos Condomínios',
+              'Disponibilidade e saldo de cada mercado',
+              Icons.apartment_outlined,
+              const EstoqueCondominioPage(),
+            ),
+            _item(
+              context,
+              'Transferências',
+              'Mover produtos do central para um Condomínio',
+              Icons.local_shipping_outlined,
+              const TransferenciaEstoquePage(),
+            ),
+            _item(
+              context,
+              'Movimentações',
+              'Trilha imutável de entradas, saídas e ajustes',
+              Icons.receipt_long_outlined,
+              const MovimentacaoEstoquePage(),
+            ),
+            _item(
+              context,
+              'Inventários',
+              'Contagem física, divergências e conflitos',
+              Icons.fact_check_outlined,
+              const InventarioListPage(),
+            ),
+            _item(
+              context,
+              'Planograma',
+              'Localização opcional dos produtos no estoque central',
+              Icons.view_module_outlined,
+              const PlanogramaPage(),
+            ),
+          ],
         ),
-        _item(
-          context,
-          'Estoque da Empresa',
-          'Saldo físico do estoque central',
-          Icons.warehouse,
-          const EstoqueCentralPage(),
-        ),
-        _item(
-          context,
-          'Estoque dos Condomínios',
-          'Disponibilidade e saldo de cada mercado',
-          Icons.apartment,
-          const EstoqueCondominioPage(),
-        ),
-        _item(
-          context,
-          'Transferências',
-          'Mover produtos do central para um condomínio',
-          Icons.local_shipping,
-          const TransferenciaEstoquePage(),
-        ),
-        _item(
-          context,
-          'Movimentações',
-          'Trilha imutável de entradas, saídas e ajustes',
-          Icons.receipt_long,
-          const MovimentacaoEstoquePage(),
-        ),
-        _item(
-          context,
-          'Planograma',
-          'Localização opcional no estoque central',
-          Icons.view_module,
-          const PlanogramaPage(),
-        ),
-      ],
-    ),
+      ),
+    ],
   );
+
   Widget _item(
     BuildContext context,
     String title,
     String subtitle,
     IconData icon,
     Widget page,
-  ) => Card(
-    child: ListTile(
-      contentPadding: const EdgeInsets.all(16),
-      leading: CircleAvatar(child: Icon(icon)),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-      subtitle: Text(subtitle),
-      trailing: const Icon(Icons.chevron_right),
-      onTap: () =>
-          Navigator.push(context, MaterialPageRoute(builder: (_) => page)),
-    ),
+  ) => AppListRow(
+    leading: AppIconWell(icon),
+    title: title,
+    meta: subtitle,
+    trailing: const Icon(Icons.chevron_right),
+    onTap: () =>
+        Navigator.push(context, MaterialPageRoute(builder: (_) => page)),
   );
 }

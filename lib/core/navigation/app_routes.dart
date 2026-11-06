@@ -21,6 +21,7 @@ abstract final class AppRoutes {
   static const promocoes = '/promocoes';
   static const estoque = '/estoque';
   static const mercadoPago = '/mercado-pago';
+  static const appCliente = '/app-cliente';
   static const vendas = '/vendas';
   static const pagamentos = '/pagamentos';
   static const alertas = '/alertas';
@@ -36,6 +37,7 @@ abstract final class AppRoutes {
     promocoes,
     estoque,
     mercadoPago,
+    appCliente,
     vendas,
     pagamentos,
     alertas,

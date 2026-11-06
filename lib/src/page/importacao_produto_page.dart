@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/theme/app_tokens.dart';
+import '../../core/widgets/app_content.dart';
+import '../../core/widgets/status_badge.dart';
 import '../model/importacao_produto.dart';
 import '../model/importacao_produto_repository.dart';
 
@@ -132,96 +135,194 @@ class _ImportacaoProdutoPageState extends State<ImportacaoProdutoPage> {
     }
   }
 
+  int get _step {
+    final resultado = _resultado;
+    if (resultado?.concluida == true) return 4;
+    if (resultado != null) return 3;
+    if (_arquivo != null) return 2;
+    return 1;
+  }
+
   @override
   Widget build(BuildContext context) {
     final resultado = _resultado;
-    return Scaffold(
-      appBar: AppBar(title: const Text('Importar produtos')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          const _Passos(),
-          const SizedBox(height: 16),
-          OutlinedButton.icon(
+    final theme = Theme.of(context);
+    final source = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
             onPressed: _loading ? null : _baixarModelo,
-            icon: const Icon(Icons.download),
-            label: const Text('BAIXAR MODELO XLSX'),
+            icon: const Icon(Icons.download, size: 18),
+            label: const Text('Baixar modelo XLSX'),
           ),
-          const SizedBox(height: 8),
-          OutlinedButton.icon(
-            onPressed: _loading ? null : _selecionar,
-            icon: const Icon(Icons.attach_file),
-            label: Text(_arquivo?.name ?? 'SELECIONAR ARQUIVO'),
-          ),
-          const SizedBox(height: 8),
-          FilledButton.icon(
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        _DropArea(
+          fileName: _arquivo?.name,
+          onTap: _loading ? null : _selecionar,
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: FilledButton.icon(
             onPressed: _loading || _arquivo == null ? null : _validar,
-            icon: const Icon(Icons.rule),
-            label: const Text('VALIDAR PLANILHA'),
+            icon: const Icon(Icons.rule, size: 18),
+            label: const Text('Validar planilha'),
           ),
-          if (_loading)
-            const Padding(
-              padding: EdgeInsets.all(24),
-              child: Center(child: CircularProgressIndicator()),
+        ),
+      ],
+    );
+    final result = resultado == null
+        ? Text(
+            'Valide a planilha para ver o resultado por linha antes de importar.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
             ),
-          if (_error != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: Card(
-                color: Theme.of(context).colorScheme.errorContainer,
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Text(_error!),
-                ),
+          )
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AppSectionTitle(
+                'Resultado por linha',
+                subtitle: resultado.nomeArquivo,
               ),
-            ),
-          if (resultado != null) ...[
-            const SizedBox(height: 16),
-            _ResumoImportacao(resultado),
-            const SizedBox(height: 12),
-            Text(
-              'Resultado por linha',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            ...resultado.preview.map(
-              (linha) => Card(
-                child: ListTile(
-                  leading: Icon(
-                    linha.status == 'ERRO'
-                        ? Icons.error
-                        : linha.status == 'IMPORTADO'
-                        ? Icons.check_circle
-                        : Icons.check,
-                    color: linha.status == 'ERRO' ? Colors.red : Colors.green,
+              Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.sm,
+                children: [
+                  AppStatusBadge(
+                    label: '${resultado.totalValidas} válidas',
+                    tone: AppStatusTone.success,
                   ),
-                  title: Text(
-                    '${linha.aba} • Linha ${linha.linha} • ${linha.codigoInterno ?? "sem SKU"}',
+                  if (resultado.totalAvisos > 0)
+                    AppStatusBadge(
+                      label: '${resultado.totalAvisos} avisos',
+                      tone: AppStatusTone.warning,
+                    ),
+                  AppStatusBadge(
+                    label: '${resultado.totalErros} erros',
+                    tone: resultado.totalErros > 0
+                        ? AppStatusTone.critical
+                        : AppStatusTone.neutral,
                   ),
-                  subtitle: Text(linha.mensagem ?? linha.status),
+                ],
+              ),
+              if (resultado.concluida) ...[
+                const SizedBox(height: AppSpacing.md),
+                AppBanner(
+                  tone: AppStatusTone.success,
+                  message:
+                      'Importação concluída: ${resultado.produtosImportados} produtos, '
+                      '${resultado.barcodesImportados} códigos e ${resultado.estoquesCriados} saldos iniciais.',
                 ),
+              ],
+              const SizedBox(height: AppSpacing.md),
+              for (final linha in resultado.preview)
+                AppListRow(
+                  dense: true,
+                  title:
+                      'Linha ${linha.linha} · ${linha.codigoInterno ?? 'sem SKU'}',
+                  meta: [
+                    linha.aba,
+                    if (linha.mensagem != null) linha.mensagem!,
+                  ].join(' · '),
+                  trailing: switch (linha.status) {
+                    'ERRO' => const AppStatusBadge(
+                      label: 'Erro',
+                      tone: AppStatusTone.critical,
+                    ),
+                    'IMPORTADO' => const AppStatusBadge(
+                      label: 'Importado',
+                      tone: AppStatusTone.success,
+                    ),
+                    'AVISO' => const AppStatusBadge(
+                      label: 'Aviso',
+                      tone: AppStatusTone.warning,
+                    ),
+                    _ => const AppStatusBadge(
+                      label: 'Válida',
+                      tone: AppStatusTone.success,
+                    ),
+                  },
+                ),
+              const SizedBox(height: AppSpacing.lg),
+              Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.sm,
+                children: [
+                  if (resultado.totalErros > 0)
+                    OutlinedButton(
+                      onPressed: _loading ? null : _verErros,
+                      child: const Text('Ver apenas erros'),
+                    ),
+                  if (resultado.podeConfirmar)
+                    FilledButton(
+                      onPressed: _loading ? null : _confirmar,
+                      child: Text(
+                        'Confirmar importação (${resultado.totalValidas})',
+                      ),
+                    ),
+                ],
               ),
+            ],
+          );
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Importar produtos'),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: AppSpacing.sm),
+            child: TextButton(
+              onPressed: () =>
+                  Navigator.pop(context, resultado?.concluida == true),
+              child: const Text('Voltar aos produtos'),
             ),
-            const SizedBox(height: 12),
-            if (resultado.podeConfirmar)
-              FilledButton.icon(
-                onPressed: _loading ? null : _confirmar,
-                icon: const Icon(Icons.upload),
-                label: const Text('CONFIRMAR IMPORTAÇÃO'),
-              ),
-            if (resultado.totalErros > 0)
-              OutlinedButton.icon(
-                onPressed: _loading ? null : _verErros,
-                icon: const Icon(Icons.error_outline),
-                label: const Text('VER APENAS ERROS'),
-              ),
-            if (resultado.concluida)
-              OutlinedButton.icon(
-                onPressed: () => Navigator.pop(context, true),
-                icon: const Icon(Icons.done),
-                label: const Text('VOLTAR AOS PRODUTOS'),
-              ),
-          ],
+          ),
+        ],
+      ),
+      body: ListView(
+        children: [
+          AppContent(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _Passos(current: _step),
+                const SizedBox(height: AppSpacing.xl),
+                if (_loading) ...[
+                  const LinearProgressIndicator(minHeight: 2),
+                  const SizedBox(height: AppSpacing.lg),
+                ],
+                if (_error != null) ...[
+                  AppBanner(tone: AppStatusTone.critical, message: _error!),
+                  const SizedBox(height: AppSpacing.lg),
+                ],
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    if (constraints.maxWidth < 900) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          source,
+                          const SizedBox(height: AppSpacing.xxl),
+                          result,
+                        ],
+                      );
+                    }
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(width: 360, child: source),
+                        const SizedBox(width: AppSpacing.section),
+                        Expanded(child: result),
+                      ],
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -229,42 +330,120 @@ class _ImportacaoProdutoPageState extends State<ImportacaoProdutoPage> {
 }
 
 class _Passos extends StatelessWidget {
-  const _Passos();
+  const _Passos({required this.current});
+  final int current;
+
   @override
-  Widget build(BuildContext context) => const Card(
-    child: Padding(
-      padding: EdgeInsets.all(16),
-      child: Text(
-        '1. Baixe o modelo\n2. Preencha a planilha\n3. Selecione o arquivo\n4. Valide\n5. Revise todos os erros\n6. Confirme a importação',
-      ),
-    ),
-  );
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    const steps = [
+      'Baixar modelo',
+      'Selecionar arquivo',
+      'Validar',
+      'Confirmar',
+    ];
+    return Wrap(
+      spacing: AppSpacing.md,
+      runSpacing: AppSpacing.sm,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        for (var i = 0; i < steps.length; i++)
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: i + 1 == current
+                      ? scheme.primary
+                      : i + 1 < current
+                      ? appToneColors(context, AppStatusTone.success).$1
+                      : null,
+                  border: i + 1 > current
+                      ? Border.all(color: scheme.outline)
+                      : null,
+                ),
+                child: i + 1 < current
+                    ? Icon(
+                        Icons.check,
+                        size: 16,
+                        color: appToneColors(context, AppStatusTone.success).$2,
+                      )
+                    : Text(
+                        '${i + 1}',
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: i + 1 == current
+                              ? scheme.onPrimary
+                              : scheme.onSurfaceVariant,
+                        ),
+                      ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Text(
+                steps[i],
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: i + 1 == current
+                      ? scheme.onSurface
+                      : scheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+      ],
+    );
+  }
 }
 
-class _ResumoImportacao extends StatelessWidget {
-  const _ResumoImportacao(this.value);
-  final ImportacaoProduto value;
+class _DropArea extends StatelessWidget {
+  const _DropArea({required this.fileName, required this.onTap});
+  final String? fileName;
+  final VoidCallback? onTap;
+
   @override
-  Widget build(BuildContext context) => Card(
-    child: Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            value.nomeArquivo,
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          Text('Status: ${value.status.replaceAll('_', ' ')}'),
-          Text(
-            '${value.totalValidas} produtos válidos • ${value.totalAvisos} avisos • ${value.totalErros} erros',
-          ),
-          if (value.concluida)
-            Text(
-              '${value.produtosImportados} produtos • ${value.barcodesImportados} códigos • ${value.estoquesCriados} saldos iniciais',
-            ),
-        ],
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      color: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        side: BorderSide(color: theme.colorScheme.outline, width: 1.5),
       ),
-    ),
-  );
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.xl),
+          child: Column(
+            children: [
+              Icon(
+                fileName == null
+                    ? Icons.upload_file_outlined
+                    : Icons.description_outlined,
+                size: 40,
+                color: theme.colorScheme.primary,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                fileName ?? 'Selecionar arquivo XLSX',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.titleSmall,
+              ),
+              Text(
+                fileName == null
+                    ? 'Use o modelo oficial preenchido'
+                    : 'Toque para trocar o arquivo',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

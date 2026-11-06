@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../core/theme/app_tokens.dart';
+import '../../core/widgets/app_content.dart';
+import '../../core/widgets/async_state.dart';
 import '../model/decimal_value.dart';
 import '../model/promocao.dart';
 import '../model/promocao_repository.dart';
@@ -190,220 +193,307 @@ class _PromocaoFormPageState extends State<PromocaoFormPage> {
         .toList();
   }
 
+  Widget get _saveButton => FilledButton(
+    onPressed: _saving ? null : _save,
+    child: Text(_saving ? 'Salvando…' : 'Salvar'),
+  );
+
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: Text(
-        widget.promocao == null ? 'Nova promoção' : 'Editar promoção',
-      ),
-    ),
-    bottomNavigationBar: SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: FilledButton(
-          onPressed: _saving ? null : _save,
-          child: _saving
-              ? const SizedBox.square(
-                  dimension: 22,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('SALVAR'),
+  Widget build(BuildContext context) {
+    final mobile = AppBreakpoints.isMobile(context);
+    final gap = const SizedBox(height: AppSpacing.xl);
+    final fields = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextFormField(
+          controller: _name,
+          decoration: const InputDecoration(labelText: 'Nome'),
+          maxLength: 150,
+          validator: (v) =>
+              v == null || v.trim().isEmpty ? 'Informe o nome' : null,
         ),
-      ),
-    ),
-    body: Form(
-      key: _formKey,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          TextFormField(
-            controller: _name,
-            decoration: const InputDecoration(labelText: 'Nome'),
-            maxLength: 150,
-            validator: (v) =>
-                v == null || v.trim().isEmpty ? 'Informe o nome' : null,
-          ),
-          TextFormField(
-            controller: _description,
-            decoration: const InputDecoration(labelText: 'Descrição'),
-            maxLength: 500,
-            maxLines: 3,
-          ),
-          const SizedBox(height: 8),
-          SegmentedButton<AbrangenciaPromocao>(
-            segments: const [
-              ButtonSegment(
-                value: AbrangenciaPromocao.empresa,
-                label: Text('Empresa'),
+        TextFormField(
+          controller: _description,
+          decoration: const InputDecoration(labelText: 'Descrição (opcional)'),
+          maxLength: 500,
+          minLines: 1,
+          maxLines: 3,
+        ),
+        gap,
+        _Label('Tipo'),
+        SegmentedButton<TipoPromocao>(
+          showSelectedIcon: false,
+          segments: const [
+            ButtonSegment(
+              value: TipoPromocao.percentual,
+              label: Text('Percentual'),
+            ),
+            ButtonSegment(
+              value: TipoPromocao.descontoFixo,
+              label: Text('Desconto fixo'),
+            ),
+            ButtonSegment(
+              value: TipoPromocao.precoFixo,
+              label: Text('Preço fixo'),
+            ),
+          ],
+          selected: {_type},
+          onSelectionChanged: (value) => setState(() => _type = value.first),
+        ),
+        gap,
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: TextFormField(
+                controller: _value,
+                decoration: InputDecoration(
+                  labelText: _valueLabel,
+                  helperText: 'Até 6 casas decimais',
+                ),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[0-9,.]')),
+                ],
+                validator: _validateValue,
               ),
-              ButtonSegment(
-                value: AbrangenciaPromocao.condominio,
-                label: Text('Condomínio'),
+            ),
+            const SizedBox(width: AppSpacing.xl),
+            Expanded(
+              child: TextFormField(
+                controller: _priority,
+                decoration: const InputDecoration(
+                  labelText: 'Prioridade',
+                  helperText: 'Maior número vence em conflito',
+                ),
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               ),
-            ],
-            selected: {_scope},
-            onSelectionChanged: (s) {
+            ),
+          ],
+        ),
+        gap,
+        _Label('Abrangência'),
+        SegmentedButton<AbrangenciaPromocao>(
+          showSelectedIcon: false,
+          segments: const [
+            ButtonSegment(
+              value: AbrangenciaPromocao.empresa,
+              label: Text('Empresa'),
+            ),
+            ButtonSegment(
+              value: AbrangenciaPromocao.condominio,
+              label: Text('Condomínio'),
+            ),
+          ],
+          selected: {_scope},
+          onSelectionChanged: (s) {
+            setState(() {
+              _scope = s.first;
+              if (_scope == AbrangenciaPromocao.empresa) _condoId = null;
+              _selected.clear();
+            });
+            _loadReferences();
+          },
+        ),
+        if (_scope == AbrangenciaPromocao.condominio) ...[
+          const SizedBox(height: AppSpacing.md),
+          DropdownButtonFormField<String>(
+            initialValue: _condoId,
+            decoration: const InputDecoration(labelText: 'Condomínio'),
+            items: _condos
+                .map((e) => DropdownMenuItem(value: e.id, child: Text(e.nome)))
+                .toList(),
+            onChanged: (v) {
               setState(() {
-                _scope = s.first;
-                if (_scope == AbrangenciaPromocao.empresa) _condoId = null;
+                _condoId = v;
                 _selected.clear();
               });
               _loadReferences();
             },
+            validator: (v) => v == null ? 'Selecione o condomínio' : null,
           ),
-          if (_scope == AbrangenciaPromocao.condominio) ...[
-            const SizedBox(height: 16),
-            DropdownButtonFormField<String>(
-              initialValue: _condoId,
-              decoration: const InputDecoration(labelText: 'Condomínio'),
-              items: _condos
-                  .map(
-                    (e) => DropdownMenuItem(value: e.id, child: Text(e.nome)),
-                  )
-                  .toList(),
-              onChanged: (v) {
-                setState(() {
-                  _condoId = v;
-                  _selected.clear();
-                });
-                _loadReferences();
-              },
-              validator: (v) => v == null ? 'Selecione o condomínio' : null,
+        ],
+        gap,
+        Row(
+          children: [
+            Expanded(
+              child: _DateField(
+                label: 'Início',
+                value: _start,
+                onTap: () => _pickDate(true),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.xl),
+            Expanded(
+              child: _DateField(
+                label: 'Término',
+                value: _end,
+                onTap: () => _pickDate(false),
+              ),
             ),
           ],
-          const SizedBox(height: 16),
-          DropdownButtonFormField<TipoPromocao>(
-            initialValue: _type,
-            decoration: const InputDecoration(labelText: 'Tipo'),
-            items: const [
-              DropdownMenuItem(
-                value: TipoPromocao.percentual,
-                child: Text('Percentual'),
-              ),
-              DropdownMenuItem(
-                value: TipoPromocao.descontoFixo,
-                child: Text('Desconto fixo'),
-              ),
-              DropdownMenuItem(
-                value: TipoPromocao.precoFixo,
-                child: Text('Preço fixo'),
-              ),
-            ],
-            onChanged: (v) => setState(() => _type = v!),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Promoção habilitada'),
+          subtitle: const Text(
+            'O status exibido também considera início e término.',
           ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _value,
-            decoration: InputDecoration(
-              labelText: _valueLabel,
-              helperText: 'Até 6 casas decimais',
-            ),
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            inputFormatters: [
-              FilteringTextInputFormatter.allow(RegExp(r'[0-9,.]')),
-            ],
-            validator: _validateValue,
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _priority,
-            decoration: const InputDecoration(labelText: 'Prioridade'),
-            keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _DateTile(
-                  label: 'Início',
-                  value: _start,
-                  onTap: () => _pickDate(true),
+          value: _active,
+          onChanged: (v) => setState(() => _active = v),
+        ),
+      ],
+    );
+    final products = _productPanel();
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          widget.promocao == null ? 'Nova promoção' : 'Editar promoção',
+        ),
+        actions: mobile
+            ? null
+            : [
+                TextButton(
+                  onPressed: _saving ? null : () => Navigator.pop(context),
+                  child: const Text('Cancelar'),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _DateTile(
-                  label: 'Término',
-                  value: _end,
-                  onTap: () => _pickDate(false),
-                ),
-              ),
-            ],
-          ),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Promoção habilitada'),
-            subtitle: const Text(
-              'O status visível também considera início e término',
-            ),
-            value: _active,
-            onChanged: (v) => setState(() => _active = v),
-          ),
-          const Divider(height: 32),
-          Text(
-            'Produtos (${_selected.length} selecionado(s))',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _search,
-            decoration: const InputDecoration(
-              prefixIcon: Icon(Icons.search),
-              labelText: 'Buscar produto',
-            ),
-          ),
-          Row(
-            children: [
-              TextButton(
-                onPressed: _visibleProducts.isEmpty
-                    ? null
-                    : () => setState(
-                        () =>
-                            _selected.addAll(_visibleProducts.map((e) => e.id)),
-                      ),
-                child: const Text('SELECIONAR VISÍVEIS'),
-              ),
-              TextButton(
-                onPressed: _selected.isEmpty
-                    ? null
-                    : () => setState(_selected.clear),
-                child: const Text('REMOVER SELEÇÃO'),
-              ),
-            ],
-          ),
-          if (_loadingProducts)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.all(24),
-                child: CircularProgressIndicator(),
-              ),
-            )
-          else if (_loadError != null)
-            Column(
-              children: [
-                Text(_loadError!),
-                OutlinedButton(
-                  onPressed: _loadReferences,
-                  child: const Text('TENTAR NOVAMENTE'),
+                const SizedBox(width: AppSpacing.sm),
+                Padding(
+                  padding: const EdgeInsets.only(right: AppSpacing.lg),
+                  child: _saveButton,
                 ),
               ],
-            )
-          else if (_products.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(24),
-              child: Text(
-                'Nenhum produto disponível para esta abrangência.',
-                textAlign: TextAlign.center,
+      ),
+      bottomNavigationBar: mobile
+          ? SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                child: _saveButton,
               ),
             )
-          else
-            ..._visibleProducts.map(
-              (product) => CheckboxListTile(
+          : null,
+      body: Form(
+        key: _formKey,
+        child: ListView(
+          children: [
+            AppContent(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  if (constraints.maxWidth < 1000) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        fields,
+                        const SizedBox(height: AppSpacing.xxl),
+                        products,
+                      ],
+                    );
+                  }
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          maxWidth: AppLayout.formMaxWidth - 160,
+                        ),
+                        child: fields,
+                      ),
+                      const SizedBox(width: AppSpacing.section),
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.only(left: AppSpacing.xl),
+                          decoration: BoxDecoration(
+                            border: Border(
+                              left: BorderSide(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.outlineVariant,
+                              ),
+                            ),
+                          ),
+                          child: products,
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _productPanel() {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AppSectionTitle(
+          'Produtos',
+          subtitle: _selected.length == 1
+              ? '1 selecionado'
+              : '${_selected.length} selecionados',
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        AppSearchField(controller: _search, hintText: 'Buscar produto'),
+        const SizedBox(height: AppSpacing.sm),
+        Wrap(
+          spacing: AppSpacing.xs,
+          children: [
+            TextButton(
+              onPressed: _visibleProducts.isEmpty
+                  ? null
+                  : () => setState(
+                      () => _selected.addAll(_visibleProducts.map((e) => e.id)),
+                    ),
+              child: const Text('Selecionar visíveis'),
+            ),
+            TextButton(
+              onPressed: _selected.isEmpty
+                  ? null
+                  : () => setState(_selected.clear),
+              child: const Text('Remover seleção'),
+            ),
+          ],
+        ),
+        if (_loadingProducts)
+          const AppLoadingState(label: 'Carregando produtos…')
+        else if (_loadError != null)
+          AppErrorState(
+            title: 'Não foi possível carregar os produtos',
+            message: _loadError!,
+            onRetry: _loadReferences,
+          )
+        else if (_products.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
+            child: Text(
+              'Nenhum produto disponível para esta abrangência.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          )
+        else
+          for (final product in _visibleProducts)
+            DecoratedBox(
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: theme.colorScheme.outlineVariant),
+                ),
+              ),
+              child: CheckboxListTile(
                 contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
                 value: _selected.contains(product.id),
                 title: Text(product.nome),
-                subtitle: Text('${product.codigo} • ${product.preco.currency}'),
+                subtitle: Text('${product.codigo} · ${product.preco.currency}'),
                 onChanged: (checked) => setState(
                   () => checked == true
                       ? _selected.add(product.id)
@@ -411,14 +501,30 @@ class _PromocaoFormPageState extends State<PromocaoFormPage> {
                 ),
               ),
             ),
-        ],
+      ],
+    );
+  }
+}
+
+class _Label extends StatelessWidget {
+  const _Label(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+    child: Text(
+      text,
+      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+        color: Theme.of(context).colorScheme.onSurfaceVariant,
+        fontWeight: FontWeight.w500,
       ),
     ),
   );
 }
 
-class _DateTile extends StatelessWidget {
-  const _DateTile({
+class _DateField extends StatelessWidget {
+  const _DateField({
     required this.label,
     required this.value,
     required this.onTap,
@@ -426,18 +532,19 @@ class _DateTile extends StatelessWidget {
   final String label;
   final DateTime value;
   final VoidCallback onTap;
+
   @override
-  Widget build(BuildContext context) => ListTile(
-    contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-    shape: RoundedRectangleBorder(
-      side: BorderSide(color: Theme.of(context).colorScheme.outline),
-      borderRadius: BorderRadius.circular(12),
-    ),
-    title: Text(label),
-    subtitle: Text(
-      '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year} ${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}',
-    ),
-    trailing: const Icon(Icons.event),
+  Widget build(BuildContext context) => InkWell(
     onTap: onTap,
+    child: InputDecorator(
+      decoration: InputDecoration(
+        labelText: label,
+        suffixIcon: const Icon(Icons.event_outlined),
+      ),
+      child: Text(
+        '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year} ${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}',
+        style: tabularFigures,
+      ),
+    ),
   );
 }

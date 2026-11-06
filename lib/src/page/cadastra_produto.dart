@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_tokens.dart';
 import '../../core/widgets/app_content.dart';
+import '../../core/widgets/status_badge.dart';
 import '../model/api_client.dart';
 import '../model/decimal_value.dart';
 import '../model/produto.dart';
@@ -460,8 +461,24 @@ class _CadastraProdutoState extends State<CadastraProduto> {
   @override
   Widget build(BuildContext context) {
     final mobile = AppBreakpoints.isMobile(context);
+    const gap = SizedBox(height: AppSpacing.section);
     return Scaffold(
-      appBar: AppBar(title: Text(_editing ? 'Editar produto' : 'Novo produto')),
+      appBar: AppBar(
+        title: Text(_editing ? 'Editar produto' : 'Novo produto'),
+        actions: mobile
+            ? null
+            : [
+                TextButton(
+                  onPressed: _saving ? null : () => Navigator.maybePop(context),
+                  child: const Text('Cancelar'),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Padding(
+                  padding: const EdgeInsets.only(right: AppSpacing.lg),
+                  child: _SaveButton(saving: _saving, onPressed: _salvar),
+                ),
+              ],
+      ),
       bottomNavigationBar: mobile
           ? SafeArea(
               minimum: const EdgeInsets.all(AppSpacing.md),
@@ -476,72 +493,72 @@ class _CadastraProdutoState extends State<CadastraProduto> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                AppPageHeader(
-                  title: _editing ? 'Editar produto' : 'Novo produto',
-                  subtitle:
-                      'Organize dados comerciais, catálogo e operação sem misturar saldos ao produto.',
-                  actions: [
-                    if (!mobile)
-                      _SaveButton(saving: _saving, onPressed: _salvar),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.xl),
+                if (_error != null) ...[
+                  AppBanner(
+                    key: const Key('product-error'),
+                    tone: AppStatusTone.critical,
+                    message: _error!,
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                ],
                 LayoutBuilder(
                   builder: (context, constraints) {
-                    if (constraints.maxWidth < 900) {
+                    final main = [
+                      _generalSection(),
+                      gap,
+                      _priceSection(),
+                      gap,
+                      _barcodeSection(),
+                      gap,
+                      _fiscalSection(),
+                    ];
+                    final side = [
+                      _stockSection(),
+                      gap,
+                      _availabilitySection(),
+                      gap,
+                      _promotionsSection(),
+                    ];
+                    if (constraints.maxWidth < 1000) {
                       return Column(
-                        children: [
-                          _generalSection(),
-                          const SizedBox(height: AppSpacing.lg),
-                          _priceSection(),
-                        ],
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [...main, gap, ...side],
                       );
                     }
                     return Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(flex: 3, child: _generalSection()),
-                        const SizedBox(width: AppSpacing.lg),
-                        Expanded(flex: 2, child: _priceSection()),
+                        Expanded(
+                          flex: 3,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: main,
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.section),
+                        Expanded(
+                          flex: 2,
+                          child: Container(
+                            padding: const EdgeInsets.only(left: AppSpacing.xl),
+                            decoration: BoxDecoration(
+                              border: Border(
+                                left: BorderSide(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.outlineVariant,
+                                ),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: side,
+                            ),
+                          ),
+                        ),
                       ],
                     );
                   },
                 ),
-                const SizedBox(height: AppSpacing.lg),
-                _barcodeSection(),
-                const SizedBox(height: AppSpacing.lg),
-                _stockSection(),
-                const SizedBox(height: AppSpacing.lg),
-                _availabilitySection(),
-                const SizedBox(height: AppSpacing.lg),
-                _fiscalSection(),
-                const SizedBox(height: AppSpacing.lg),
-                _promotionsSection(),
-                if (_error != null) ...[
-                  const SizedBox(height: AppSpacing.lg),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(AppSpacing.lg),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.errorContainer,
-                      borderRadius: BorderRadius.circular(AppRadius.md),
-                    ),
-                    child: Text(
-                      _error!,
-                      key: const Key('product-error'),
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onErrorContainer,
-                      ),
-                    ),
-                  ),
-                ],
-                if (!mobile) ...[
-                  const SizedBox(height: AppSpacing.xl),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: _SaveButton(saving: _saving, onPressed: _salvar),
-                  ),
-                ],
                 const SizedBox(height: AppSpacing.xxl),
               ],
             ),
@@ -1021,79 +1038,81 @@ class _SectionCard extends StatefulWidget {
 
 class _SectionCardState extends State<_SectionCard> {
   late bool _expanded = !widget.collapsible || widget.initiallyExpanded;
+
   @override
-  Widget build(BuildContext context) => Card(
-    child: Padding(
-      padding: const EdgeInsets.all(AppSpacing.xl),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final heading = Row(
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final heading = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(widget.title, style: theme.textTheme.titleLarge),
+        if (widget.subtitle != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Text(
+              widget.subtitle!,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+      ],
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final toggle = widget.collapsible
+                ? IconButton(
+                    tooltip: _expanded ? 'Recolher seção' : 'Expandir seção',
+                    onPressed: () => setState(() => _expanded = !_expanded),
+                    icon: Icon(
+                      _expanded ? Icons.expand_less : Icons.expand_more,
+                    ),
+                  )
+                : null;
+            if (widget.action != null && constraints.maxWidth < 480) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Icon(
-                    widget.icon,
-                    color: Theme.of(context).colorScheme.primary,
+                  Row(
+                    children: [
+                      Expanded(child: heading),
+                      ?toggle,
+                    ],
                   ),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          widget.title,
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                        if (widget.subtitle != null)
-                          Text(
-                            widget.subtitle!,
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                      ],
-                    ),
-                  ),
-                  if (widget.collapsible)
-                    IconButton(
-                      tooltip: _expanded ? 'Recolher seção' : 'Expandir seção',
-                      onPressed: () => setState(() => _expanded = !_expanded),
-                      icon: Icon(
-                        _expanded ? Icons.expand_less : Icons.expand_more,
-                      ),
-                    ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Align(alignment: Alignment.centerLeft, child: widget.action!),
                 ],
               );
-              if (widget.action == null) return heading;
-              if (constraints.maxWidth < 480) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    heading,
-                    const SizedBox(height: AppSpacing.sm),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: widget.action!,
-                    ),
-                  ],
-                );
-              }
-              return Row(
+            }
+            return InkWell(
+              onTap: widget.collapsible
+                  ? () => setState(() => _expanded = !_expanded)
+                  : null,
+              child: Row(
                 children: [
                   Expanded(child: heading),
-                  const SizedBox(width: AppSpacing.md),
-                  widget.action!,
+                  if (widget.action != null) ...[
+                    const SizedBox(width: AppSpacing.md),
+                    widget.action!,
+                  ],
+                  ?toggle,
                 ],
-              );
-            },
+              ),
+            );
+          },
+        ),
+        if (widget.collapsible && !_expanded)
+          const Padding(
+            padding: EdgeInsets.only(top: AppSpacing.md),
+            child: Divider(),
           ),
-          if (_expanded) ...[
-            const SizedBox(height: AppSpacing.xl),
-            widget.child,
-          ],
-        ],
-      ),
-    ),
-  );
+        if (_expanded) ...[const SizedBox(height: AppSpacing.lg), widget.child],
+      ],
+    );
+  }
 }
 
 class _ResponsiveFields extends StatelessWidget {
@@ -1149,10 +1168,11 @@ class _BarcodeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(AppSpacing.lg),
+    padding: const EdgeInsets.only(bottom: AppSpacing.md),
     decoration: BoxDecoration(
-      border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-      borderRadius: BorderRadius.circular(AppRadius.md),
+      border: Border(
+        bottom: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+      ),
     ),
     child: Column(
       children: [
@@ -1189,7 +1209,9 @@ class _BarcodeCard extends StatelessWidget {
             DropdownButtonFormField<String>(
               initialValue: editor.tipo,
               decoration: const InputDecoration(labelText: 'Tipo'),
-              items: const ['EAN', 'GTIN', 'INTERNO']
+              // O back aceita tipo livre (a planilha usa EAN13/GTIN13); um
+              // valor fora da lista entra como opção para não quebrar o campo.
+              items: {..._barcodeTypes, editor.tipo}
                   .map(
                     (value) =>
                         DropdownMenuItem(value: value, child: Text(value)),
@@ -1266,7 +1288,7 @@ class _SaveButton extends StatelessWidget {
             dimension: 18,
             child: CircularProgressIndicator(strokeWidth: 2),
           )
-        : const Icon(Icons.save_outlined),
+        : const Icon(Icons.check, size: 18),
     label: Text(saving ? 'Salvando…' : 'Salvar produto'),
   );
 }
@@ -1284,3 +1306,5 @@ class _BarcodeEditor {
   bool ativo;
   void dispose() => codigo.dispose();
 }
+
+const _barcodeTypes = ['EAN', 'EAN13', 'GTIN', 'GTIN13', 'INTERNO'];

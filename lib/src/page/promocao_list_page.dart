@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme/app_tokens.dart';
+import '../../core/widgets/app_content.dart';
+import '../../core/widgets/async_state.dart';
+import '../../core/widgets/status_badge.dart';
+import '../model/decimal_value.dart';
 import '../model/promocao.dart';
 import '../model/promocao_repository.dart';
 import 'promocao_detail_page.dart';
@@ -70,219 +75,280 @@ class _PromocaoListPageState extends State<PromocaoListPage> {
     if (changed == true) _load();
   }
 
+  Future<void> _openDetail(Promocao promotion) async {
+    final changed = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            PromocaoDetailPage(repository: _repository, initial: promotion),
+      ),
+    );
+    if (changed == true) _load();
+  }
+
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Promoções')),
-    floatingActionButton: FloatingActionButton.extended(
-      onPressed: () => _openForm(),
-      icon: const Icon(Icons.add),
-      label: const Text('NOVA PROMOÇÃO'),
-    ),
-    body: RefreshIndicator(
-      onRefresh: _load,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              SizedBox(
-                width: 210,
-                child: DropdownButtonFormField<AbrangenciaPromocao?>(
-                  initialValue: _scope,
-                  decoration: const InputDecoration(labelText: 'Abrangência'),
-                  items: const [
-                    DropdownMenuItem(value: null, child: Text('Todas')),
-                    DropdownMenuItem(
-                      value: AbrangenciaPromocao.empresa,
-                      child: Text('Empresa'),
-                    ),
-                    DropdownMenuItem(
-                      value: AbrangenciaPromocao.condominio,
-                      child: Text('Condomínio'),
-                    ),
-                  ],
-                  onChanged: (v) {
-                    setState(() {
-                      _scope = v;
-                      if (v == AbrangenciaPromocao.empresa) {
-                        _condominioId = null;
-                      }
-                    });
-                    _load();
-                  },
-                ),
-              ),
-              SizedBox(
-                width: 210,
-                child: DropdownButtonFormField<StatusPromocao?>(
-                  initialValue: _status,
-                  decoration: const InputDecoration(labelText: 'Status'),
-                  items: [
-                    const DropdownMenuItem(value: null, child: Text('Todos')),
-                    ...StatusPromocao.values.map(
-                      (e) => DropdownMenuItem(value: e, child: Text(e.apiName)),
-                    ),
-                  ],
-                  onChanged: (v) {
-                    _status = v;
-                    _load();
-                  },
-                ),
-              ),
-              SizedBox(
-                width: 260,
-                child: DropdownButtonFormField<String?>(
-                  initialValue: _condominioId,
-                  decoration: const InputDecoration(labelText: 'Condomínio'),
-                  items: [
-                    const DropdownMenuItem(
-                      value: null,
-                      child: Text('Todos os condomínios'),
-                    ),
-                    ..._condominios.map(
-                      (e) => DropdownMenuItem(value: e.id, child: Text(e.nome)),
-                    ),
-                  ],
-                  onChanged: _scope == AbrangenciaPromocao.empresa
-                      ? null
-                      : (v) {
-                          _condominioId = v;
+  Widget build(BuildContext context) {
+    final mobile = AppBreakpoints.isMobile(context);
+    return Scaffold(
+      floatingActionButton: mobile
+          ? FloatingActionButton.extended(
+              onPressed: () => _openForm(),
+              icon: const Icon(Icons.add),
+              label: const Text('Nova promoção'),
+            )
+          : null,
+      body: RefreshIndicator(
+        onRefresh: _load,
+        child: ListView(
+          children: [
+            AppContent(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  AppPageHeader(
+                    title: 'Promoções',
+                    subtitle:
+                        'Preços especiais para a Empresa ou um Condomínio. O status considera as datas de início e término.',
+                    actions: [
+                      if (!mobile)
+                        FilledButton.icon(
+                          onPressed: () => _openForm(),
+                          icon: const Icon(Icons.add, size: 18),
+                          label: const Text('Nova promoção'),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                  Wrap(
+                    spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.sm,
+                    children: [
+                      ChoiceChip(
+                        label: const Text('Todas'),
+                        selected: _status == null,
+                        onSelected: (_) {
+                          setState(() => _status = null);
                           _load();
                         },
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          if (_loading)
-            const Padding(
-              padding: EdgeInsets.all(48),
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else if (_error != null)
-            _StateMessage(
-              icon: Icons.cloud_off,
-              title: 'Não foi possível carregar',
-              message: _error!,
-              action: 'TENTAR NOVAMENTE',
-              onPressed: _load,
-            )
-          else if (_items.isEmpty)
-            _StateMessage(
-              icon: Icons.local_offer_outlined,
-              title: 'Nenhuma promoção cadastrada',
-              message:
-                  'Crie uma promoção para oferecer preços especiais\nem sua empresa ou em um condomínio.',
-              action: 'CRIAR PROMOÇÃO',
-              onPressed: () => _openForm(),
-            )
-          else
-            ..._items.map(
-              (promotion) => _PromotionCard(
-                promotion: promotion,
-                onTap: () async {
-                  final changed = await Navigator.push<bool>(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => PromocaoDetailPage(
-                        repository: _repository,
-                        initial: promotion,
                       ),
-                    ),
-                  );
-                  if (changed == true) _load();
-                },
-              ),
-            ),
-          const SizedBox(height: 80),
-        ],
-      ),
-    ),
-  );
-}
-
-class _PromotionCard extends StatelessWidget {
-  const _PromotionCard({required this.promotion, required this.onTap});
-  final Promocao promotion;
-  final VoidCallback onTap;
-  @override
-  Widget build(BuildContext context) => Card(
-    child: InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    promotion.nome,
-                    style: Theme.of(context).textTheme.titleLarge,
+                      for (final status in const [
+                        StatusPromocao.ativa,
+                        StatusPromocao.agendada,
+                        StatusPromocao.encerrada,
+                        StatusPromocao.desativada,
+                      ])
+                        ChoiceChip(
+                          label: Text(promotionStatusLabel(status)),
+                          selected: _status == status,
+                          onSelected: (_) {
+                            setState(() => _status = status);
+                            _load();
+                          },
+                        ),
+                    ],
                   ),
-                ),
-                Chip(label: Text(promotion.status.apiName)),
-              ],
-            ),
-            Text(
-              switch (promotion.tipo) {
-                TipoPromocao.percentual => '${promotion.valor.friendly}% OFF',
-                TipoPromocao.descontoFixo => '${promotion.valor.currency} OFF',
-                TipoPromocao.precoFixo => 'POR ${promotion.valor.currency}',
-              },
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.primary,
-                fontWeight: FontWeight.bold,
+                  const SizedBox(height: AppSpacing.md),
+                  Wrap(
+                    spacing: AppSpacing.xl,
+                    runSpacing: AppSpacing.md,
+                    children: [
+                      SizedBox(
+                        width: mobile ? double.infinity : 200,
+                        child: DropdownButtonFormField<AbrangenciaPromocao?>(
+                          initialValue: _scope,
+                          decoration: const InputDecoration(
+                            labelText: 'Abrangência',
+                          ),
+                          items: const [
+                            DropdownMenuItem(value: null, child: Text('Todas')),
+                            DropdownMenuItem(
+                              value: AbrangenciaPromocao.empresa,
+                              child: Text('Empresa'),
+                            ),
+                            DropdownMenuItem(
+                              value: AbrangenciaPromocao.condominio,
+                              child: Text('Condomínio'),
+                            ),
+                          ],
+                          onChanged: (v) {
+                            setState(() {
+                              _scope = v;
+                              if (v == AbrangenciaPromocao.empresa) {
+                                _condominioId = null;
+                              }
+                            });
+                            _load();
+                          },
+                        ),
+                      ),
+                      SizedBox(
+                        width: mobile ? double.infinity : 260,
+                        child: DropdownButtonFormField<String?>(
+                          initialValue: _condominioId,
+                          isExpanded: true,
+                          decoration: const InputDecoration(
+                            labelText: 'Condomínio',
+                          ),
+                          items: [
+                            const DropdownMenuItem(
+                              value: null,
+                              child: Text('Todos os condomínios'),
+                            ),
+                            ..._condominios.map(
+                              (e) => DropdownMenuItem(
+                                value: e.id,
+                                child: Text(e.nome),
+                              ),
+                            ),
+                          ],
+                          onChanged: _scope == AbrangenciaPromocao.empresa
+                              ? null
+                              : (v) {
+                                  _condominioId = v;
+                                  _load();
+                                },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                  if (_loading)
+                    const AppLoadingState(label: 'Carregando promoções…')
+                  else if (_error != null)
+                    AppErrorState(
+                      title: 'Não foi possível carregar as promoções',
+                      message: _error!,
+                      onRetry: _load,
+                    )
+                  else if (_items.isEmpty)
+                    AppEmptyState(
+                      icon: Icons.local_offer_outlined,
+                      title: 'Nenhuma promoção cadastrada',
+                      message:
+                          'Crie uma promoção para oferecer preços especiais na Empresa ou em um Condomínio.',
+                      action: FilledButton(
+                        onPressed: () => _openForm(),
+                        child: const Text('Nova promoção'),
+                      ),
+                    )
+                  else if (mobile)
+                    for (final promotion in _items)
+                      AppListRow(
+                        title: promotion.nome,
+                        meta:
+                            '${promotionValueLabel(promotion.tipo, promotion.valor)} · '
+                            '${promotionScopeLabel(promotion)}\n'
+                            '${promotionDate(promotion.inicio)} – ${promotionDate(promotion.fim)}',
+                        trailing: promotionStatusBadge(promotion.status),
+                        onTap: () => _openDetail(promotion),
+                      )
+                  else
+                    _table(),
+                  const SizedBox(height: 88),
+                ],
               ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              promotion.abrangencia == AbrangenciaPromocao.empresa
-                  ? 'EMPRESA'
-                  : 'CONDOMÍNIO • ${promotion.condominioNome ?? ''}',
-            ),
-            Text(
-              '${promotion.produtos.length} produto(s) • ${_date(promotion.inicio)} → ${_date(promotion.fim)}',
             ),
           ],
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
-String _date(DateTime value) =>
-    '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}';
-
-class _StateMessage extends StatelessWidget {
-  const _StateMessage({
-    required this.icon,
-    required this.title,
-    required this.message,
-    required this.action,
-    required this.onPressed,
-  });
-  final IconData icon;
-  final String title;
-  final String message;
-  final String action;
-  final VoidCallback onPressed;
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 56),
-    child: Column(
-      children: [
-        Icon(icon, size: 56, color: Theme.of(context).colorScheme.primary),
-        const SizedBox(height: 12),
-        Text(title, style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 8),
-        Text(message, textAlign: TextAlign.center),
-        const SizedBox(height: 20),
-        OutlinedButton(onPressed: onPressed, child: Text(action)),
+  Widget _table() {
+    final theme = Theme.of(context);
+    final muted = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+    return AppTable(
+      columns: const [
+        DataColumn(label: Text('Promoção')),
+        DataColumn(label: Text('Tipo')),
+        DataColumn(label: Text('Valor'), numeric: true),
+        DataColumn(label: Text('Abrangência')),
+        DataColumn(label: Text('Período')),
+        DataColumn(label: Text('Prioridade'), numeric: true),
+        DataColumn(label: Text('Status')),
+        DataColumn(label: SizedBox.shrink()),
       ],
-    ),
-  );
+      rows: [
+        for (final promotion in _items)
+          DataRow(
+            onSelectChanged: (_) => _openDetail(promotion),
+            cells: [
+              DataCell(
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(promotion.nome, style: theme.textTheme.titleSmall),
+                    Text(
+                      promotion.produtos.length == 1
+                          ? '1 produto'
+                          : '${promotion.produtos.length} produtos',
+                      style: muted,
+                    ),
+                  ],
+                ),
+              ),
+              DataCell(Text(promotionTypeLabel(promotion.tipo))),
+              DataCell(
+                Text(
+                  promotionValueLabel(promotion.tipo, promotion.valor),
+                  style: tabularFigures.copyWith(fontWeight: FontWeight.w600),
+                ),
+              ),
+              DataCell(Text(promotionScopeLabel(promotion))),
+              DataCell(
+                Text(
+                  '${promotionDate(promotion.inicio)} – ${promotionDate(promotion.fim)}',
+                  style: tabularFigures,
+                ),
+              ),
+              DataCell(Text('${promotion.prioridade}', style: tabularFigures)),
+              DataCell(promotionStatusBadge(promotion.status)),
+              const DataCell(Icon(Icons.chevron_right)),
+            ],
+          ),
+      ],
+    );
+  }
 }
+
+String promotionStatusLabel(StatusPromocao status) => switch (status) {
+  StatusPromocao.ativa => 'Ativa',
+  StatusPromocao.agendada => 'Agendada',
+  StatusPromocao.encerrada => 'Encerrada',
+  StatusPromocao.desativada => 'Desativada',
+};
+
+AppStatusBadge promotionStatusBadge(StatusPromocao status) => AppStatusBadge(
+  label: promotionStatusLabel(status),
+  tone: switch (status) {
+    StatusPromocao.ativa => AppStatusTone.success,
+    StatusPromocao.agendada => AppStatusTone.info,
+    _ => AppStatusTone.neutral,
+  },
+);
+
+String promotionTypeLabel(TipoPromocao tipo) => switch (tipo) {
+  TipoPromocao.percentual => 'Percentual',
+  TipoPromocao.descontoFixo => 'Desconto fixo',
+  TipoPromocao.precoFixo => 'Preço fixo',
+};
+
+String promotionValueLabel(TipoPromocao tipo, DecimalValue valor) =>
+    switch (tipo) {
+      TipoPromocao.percentual => '${valor.friendly}% de desconto',
+      TipoPromocao.descontoFixo => '${valor.currency} de desconto',
+      TipoPromocao.precoFixo => 'Por ${valor.currency}',
+    };
+
+String promotionScopeLabel(Promocao promotion) =>
+    promotion.abrangencia == AbrangenciaPromocao.empresa
+    ? 'Empresa'
+    : promotion.condominioNome?.isNotEmpty == true
+    ? promotion.condominioNome!
+    : 'Condomínio';
+
+String promotionDate(DateTime value) =>
+    '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}';

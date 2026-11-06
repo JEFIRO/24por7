@@ -30,7 +30,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('cadastro Web usa duas colunas no bloco principal', (
+  testWidgets('cadastro Web põe estoque e disponibilidade no painel lateral', (
     tester,
   ) async {
     await _surface(tester, const Size(1366, 1000));
@@ -42,11 +42,11 @@ void main() {
     final general = tester.getTopLeft(
       find.byKey(const Key('product-general-section')),
     );
-    final price = tester.getTopLeft(
-      find.byKey(const Key('product-price-section')),
+    final stock = tester.getTopLeft(
+      find.byKey(const Key('product-stock-section')),
     );
-    expect(price.dx, greaterThan(general.dx));
-    expect((price.dy - general.dy).abs(), lessThan(2));
+    expect(stock.dx, greaterThan(general.dx));
+    expect((stock.dy - general.dy).abs(), lessThan(2));
     expect(tester.takeException(), isNull);
   });
 
@@ -213,6 +213,48 @@ void main() {
     expect(repository.capturedProduct?.id, 'product-1');
     expect(repository.capturedProduct?.codigosBarras.last.ativo, isFalse);
   });
+
+  testWidgets(
+    'edição aceita tipo de barcode vindo da planilha ou fora da lista',
+    (tester) async {
+      await _surface(tester, const Size(360, 800));
+      final repository = _FakeProdutoRepository();
+      final product = Produto(
+        id: 'product-2',
+        codigoInterno: 'SKU-PLANILHA',
+        codigosBarras: const [
+          ProdutoCodigoBarras(
+            codigo: '7894900011517',
+            tipo: 'EAN13',
+            principal: true,
+          ),
+          ProdutoCodigoBarras(codigo: '17894900011514', tipo: 'DUN14'),
+        ],
+        nome: 'Produto importado',
+        preco: DecimalValue.parse('12.50'),
+        unidadeMedida: 'UN',
+        categoria: 'OUTROS',
+      );
+      await tester.pumpWidget(
+        _app(
+          CadastraProduto(
+            produto: product,
+            repository: repository,
+            promocaoRepository: _FakePromocaoRepository(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.byKey(const Key('save-product-button')));
+      await tester.pumpAndSettle();
+      expect(
+        repository.capturedProduct?.codigosBarras.map((c) => c.tipo).toList(),
+        ['EAN13', 'DUN14'],
+      );
+    },
+  );
 }
 
 class _FakePromocaoRepository extends PromocaoRepository {

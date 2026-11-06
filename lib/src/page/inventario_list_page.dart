@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../core/formatters/app_formatters.dart';
+import '../../core/theme/app_tokens.dart';
+import '../../core/widgets/app_content.dart';
+import '../../core/widgets/async_state.dart';
+import '../../core/widgets/status_badge.dart';
 import '../model/inventario.dart';
 import '../model/inventario_repository.dart';
 import 'inventario_detail_page.dart';
@@ -49,38 +54,53 @@ class _InventarioListPageState extends State<InventarioListPage> {
       builder: (context) => StatefulBuilder(
         builder: (context, setLocal) => AlertDialog(
           title: const Text('Novo inventário'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(Icons.warehouse),
-                title: Text('Estoque Central'),
-                subtitle: Text('O saldo será congelado como referência'),
-              ),
-              TextField(
-                controller: descricao,
-                decoration: const InputDecoration(labelText: 'Descrição'),
-              ),
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                value: cega,
-                title: const Text('Contagem cega'),
-                subtitle: const Text(
-                  'Oculta o saldo esperado durante a contagem',
+          content: SizedBox(
+            width: 440,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const InputDecorator(
+                  decoration: InputDecoration(
+                    labelText: 'Local',
+                    prefixIcon: Icon(Icons.warehouse_outlined),
+                    enabled: false,
+                  ),
+                  child: Text('Estoque central'),
                 ),
-                onChanged: (value) => setLocal(() => cega = value ?? false),
-              ),
-            ],
+                const SizedBox(height: AppSpacing.lg),
+                TextField(
+                  controller: descricao,
+                  decoration: const InputDecoration(
+                    labelText: 'Descrição (opcional)',
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: cega,
+                  title: const Text('Contagem cega'),
+                  subtitle: const Text(
+                    'Oculta o saldo esperado durante a contagem',
+                  ),
+                  onChanged: (value) => setLocal(() => cega = value),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                const AppBanner(
+                  tone: AppStatusTone.info,
+                  message: 'O saldo atual será congelado como referência.',
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('CANCELAR'),
+              child: const Text('Cancelar'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('INICIAR'),
+              child: const Text('Iniciar'),
             ),
           ],
         ),
@@ -112,117 +132,196 @@ class _InventarioListPageState extends State<InventarioListPage> {
     }
   }
 
+  Future<void> _open(Inventario item) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => InventarioDetailPage(
+          inventarioId: item.id,
+          repository: _repository,
+        ),
+      ),
+    );
+    _carregar();
+  }
+
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Inventários')),
-    floatingActionButton: FloatingActionButton.extended(
-      onPressed: _loading ? null : _novo,
-      icon: const Icon(Icons.add),
-      label: const Text('NOVO INVENTÁRIO'),
-    ),
-    body: RefreshIndicator(
-      onRefresh: _carregar,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 96),
-        children: [
-          DropdownButtonFormField<String?>(
-            initialValue: _status,
-            decoration: const InputDecoration(
-              labelText: 'Status',
-              border: OutlineInputBorder(),
-            ),
-            items: const [
-              DropdownMenuItem(value: null, child: Text('Todos')),
-              DropdownMenuItem(
-                value: 'EM_CONTAGEM',
-                child: Text('Em contagem'),
-              ),
-              DropdownMenuItem(
-                value: 'COM_CONFLITO',
-                child: Text('Com conflito'),
-              ),
-              DropdownMenuItem(value: 'FINALIZADO', child: Text('Finalizados')),
-              DropdownMenuItem(value: 'CANCELADO', child: Text('Cancelados')),
-            ],
-            onChanged: (value) {
-              _status = value;
-              _carregar();
-            },
-          ),
-          const SizedBox(height: 12),
-          if (_loading)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.all(48),
-                child: CircularProgressIndicator(),
-              ),
-            )
-          else if (_error != null)
-            _ErrorState(message: _error!, retry: _carregar)
-          else if (_itens.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(48),
-              child: Column(
-                children: [
-                  Icon(Icons.fact_check_outlined, size: 52),
-                  SizedBox(height: 12),
-                  Text('Nenhum inventário encontrado'),
-                ],
-              ),
-            )
-          else
-            ..._itens.map(
-              (item) => Card(
-                child: ListTile(
-                  leading: const CircleAvatar(child: Icon(Icons.fact_check)),
-                  title: Text(item.descricao ?? item.localNome),
-                  subtitle: Text(
-                    '${item.localNome}\n${item.contados}/${item.totalProdutos} contados • ${item.divergencias} divergência(s)',
-                  ),
-                  isThreeLine: true,
-                  trailing: _StatusChip(item.status),
-                  onTap: () async {
-                    await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => InventarioDetailPage(
-                          inventarioId: item.id,
-                          repository: _repository,
-                        ),
-                      ),
-                    );
-                    _carregar();
-                  },
-                ),
+  Widget build(BuildContext context) {
+    final mobile = AppBreakpoints.isMobile(context);
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Inventários'),
+        actions: [
+          if (!mobile)
+            Padding(
+              padding: const EdgeInsets.only(right: AppSpacing.lg),
+              child: FilledButton.icon(
+                onPressed: _loading ? null : _novo,
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Novo inventário'),
               ),
             ),
         ],
       ),
-    ),
-  );
-}
+      floatingActionButton: mobile
+          ? FloatingActionButton.extended(
+              onPressed: _loading ? null : _novo,
+              icon: const Icon(Icons.add),
+              label: const Text('Novo inventário'),
+            )
+          : null,
+      body: RefreshIndicator(
+        onRefresh: _carregar,
+        child: ListView(
+          children: [
+            AppContent(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.sm,
+                    children: [
+                      for (final (value, label) in const [
+                        (null, 'Todos'),
+                        ('EM_CONTAGEM', 'Em contagem'),
+                        ('COM_CONFLITO', 'Com conflito'),
+                        ('FINALIZADO', 'Finalizados'),
+                        ('CANCELADO', 'Cancelados'),
+                      ])
+                        ChoiceChip(
+                          label: Text(label),
+                          selected: _status == value,
+                          onSelected: (_) {
+                            _status = value;
+                            _carregar();
+                          },
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  if (_loading)
+                    const AppLoadingState(label: 'Carregando inventários…')
+                  else if (_error != null)
+                    AppErrorState(message: _error!, onRetry: _carregar)
+                  else if (_itens.isEmpty)
+                    AppEmptyState(
+                      icon: Icons.fact_check_outlined,
+                      title: 'Nenhum inventário encontrado',
+                      message:
+                          'Inicie uma contagem física para comparar com o saldo do sistema.',
+                      action: FilledButton(
+                        onPressed: _novo,
+                        child: const Text('Novo inventário'),
+                      ),
+                    )
+                  else if (mobile)
+                    for (final item in _itens)
+                      AppListRow(
+                        title: item.descricao ?? item.localNome,
+                        meta:
+                            '${item.contados} de ${item.totalProdutos} contados · '
+                            '${item.divergencias == 1 ? '1 divergência' : '${item.divergencias} divergências'}',
+                        trailing: inventoryStatusBadge(item.status),
+                        onTap: () => _open(item),
+                      )
+                  else
+                    _table(),
+                  const SizedBox(height: 88),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
-class _StatusChip extends StatelessWidget {
-  const _StatusChip(this.status);
-  final String status;
-  @override
-  Widget build(BuildContext context) =>
-      Chip(label: Text(status.replaceAll('_', ' ')));
-}
-
-class _ErrorState extends StatelessWidget {
-  const _ErrorState({required this.message, required this.retry});
-  final String message;
-  final VoidCallback retry;
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.all(32),
-    child: Column(
-      children: [
-        const Icon(Icons.cloud_off, size: 48),
-        Text(message, textAlign: TextAlign.center),
-        TextButton(onPressed: retry, child: const Text('TENTAR NOVAMENTE')),
+  Widget _table() {
+    final theme = Theme.of(context);
+    final muted = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+    return AppTable(
+      columns: const [
+        DataColumn(label: Text('Inventário')),
+        DataColumn(label: Text('Local')),
+        DataColumn(label: Text('Modo')),
+        DataColumn(label: Text('Progresso')),
+        DataColumn(label: Text('Divergências'), numeric: true),
+        DataColumn(label: Text('Status')),
       ],
-    ),
-  );
+      rows: [
+        for (final item in _itens)
+          DataRow(
+            onSelectChanged: (_) => _open(item),
+            cells: [
+              DataCell(
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.descricao ?? 'Inventário',
+                      style: theme.textTheme.titleSmall,
+                    ),
+                    if (item.createdAt != null)
+                      Text(
+                        AppFormatters.dateTime(item.createdAt),
+                        style: muted,
+                      ),
+                  ],
+                ),
+              ),
+              DataCell(Text(item.localNome)),
+              DataCell(Text(item.contagemCega ? 'Contagem cega' : 'Aberta')),
+              DataCell(
+                SizedBox(
+                  width: 140,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${item.contados} de ${item.totalProdutos}',
+                        style: tabularFigures,
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(2),
+                        child: LinearProgressIndicator(
+                          minHeight: 4,
+                          value: item.totalProdutos == 0
+                              ? 0
+                              : item.contados / item.totalProdutos,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              DataCell(Text('${item.divergencias}', style: tabularFigures)),
+              DataCell(inventoryStatusBadge(item.status)),
+            ],
+          ),
+      ],
+    );
+  }
 }
+
+AppStatusBadge inventoryStatusBadge(String status) => switch (status) {
+  'EM_CONTAGEM' => const AppStatusBadge(
+    label: 'Em contagem',
+    tone: AppStatusTone.info,
+  ),
+  'COM_CONFLITO' => const AppStatusBadge(
+    label: 'Com conflito',
+    tone: AppStatusTone.critical,
+  ),
+  'FINALIZADO' => const AppStatusBadge(
+    label: 'Finalizado',
+    tone: AppStatusTone.success,
+  ),
+  'CANCELADO' => const AppStatusBadge(label: 'Cancelado'),
+  _ => AppStatusBadge(label: status.replaceAll('_', ' ').toLowerCase()),
+};

@@ -7,7 +7,7 @@ void main() {
   ) async {
     await tester.pumpWidget(const MyApp());
 
-    expect(find.text('Bem-vindo'), findsOneWidget);
+    expect(find.text('Entrar no painel'), findsOneWidget);
     expect(find.text('Entrar'), findsOneWidget);
   });
 }

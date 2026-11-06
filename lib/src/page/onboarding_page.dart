@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme/app_theme.dart';
 import '../../core/theme/app_tokens.dart';
+import '../../core/widgets/app_content.dart';
+import '../../core/widgets/status_badge.dart';
 import '../model/operational_repository.dart';
 
 class OnboardingPage extends StatefulWidget {
@@ -16,6 +19,14 @@ class _OnboardingPageState extends State<OnboardingPage> {
   late final OperationalRepository _repository;
   bool _loading = false;
   String? _error;
+  int _step = 0;
+
+  static const _steps = [
+    'Gestor',
+    'Empresa',
+    'Primeiro condomínio',
+    'Primeiro Terminal',
+  ];
 
   TextEditingController _controller(String key) =>
       _fields.putIfAbsent(key, TextEditingController.new);
@@ -39,12 +50,18 @@ class _OnboardingPageState extends State<OnboardingPage> {
     String label, {
     bool secret = false,
     bool optional = false,
+    String? helper,
+    TextInputType? keyboard,
   }) => Padding(
-    padding: const EdgeInsets.only(bottom: 12),
+    padding: const EdgeInsets.only(bottom: AppSpacing.lg),
     child: TextFormField(
       controller: _controller(key),
       obscureText: secret,
-      decoration: InputDecoration(labelText: label),
+      keyboardType: keyboard,
+      decoration: InputDecoration(
+        labelText: optional ? '$label (opcional)' : label,
+        helperText: helper,
+      ),
       validator: optional
           ? null
           : (value) => value == null || value.trim().isEmpty
@@ -121,7 +138,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
           actions: [
             FilledButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('ENTRAR'),
+              child: const Text('Entrar'),
             ),
           ],
         ),
@@ -134,80 +151,279 @@ class _OnboardingPageState extends State<OnboardingPage> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Configurar nova empresa')),
-    body: Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: AppLayout.formMaxWidth),
-        child: Form(
-          key: _form,
-          child: ListView(
-            padding: const EdgeInsets.all(AppSpacing.xl),
+  void _next() {
+    if (!_form.currentState!.validate()) return;
+    if (_step == _steps.length - 1) {
+      _submit();
+    } else {
+      setState(() => _step++);
+    }
+  }
+
+  Widget _pair(Widget a, Widget b) => LayoutBuilder(
+    builder: (context, constraints) => constraints.maxWidth < 480
+        ? Column(children: [a, b])
+        : Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('GESTOR', style: Theme.of(context).textTheme.titleMedium),
-              _field('gestorNome', 'Nome'),
-              _field('gestorSobrenome', 'Sobrenome'),
-              _field('gestorEmail', 'E-mail'),
-              _field('gestorSenha', 'Senha', secret: true),
-              _field('gestorCpf', 'CPF'),
-              _field('gestorTelefone', 'Telefone', optional: true),
-              _field('gestorNascimento', 'Nascimento (aaaa-mm-dd)'),
-              const Divider(height: 32),
-              Text('EMPRESA', style: Theme.of(context).textTheme.titleMedium),
-              _field('razaoSocial', 'Razão social'),
-              _field('nomeFantasia', 'Nome fantasia'),
-              _field('empresaCnpj', 'CNPJ'),
-              _field('empresaEmail', 'E-mail da empresa'),
-              _field('empresaTelefone', 'Telefone da empresa'),
-              const Divider(height: 32),
-              Text('ENDEREÇO', style: Theme.of(context).textTheme.titleMedium),
-              _field('cep', 'CEP'),
-              _field('logradouro', 'Logradouro'),
-              _field('numero', 'Número'),
-              _field('bairro', 'Bairro'),
-              _field('cidade', 'Cidade'),
-              _field('estado', 'UF'),
-              const Divider(height: 32),
-              Text(
-                'PRIMEIRO CONDOMÍNIO',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              _field('condominioNome', 'Nome do condomínio'),
-              _field('condominioCnpj', 'CNPJ do condomínio', optional: true),
-              const Divider(height: 32),
-              Text(
-                'PRIMEIRO TERMINAL',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              _field('terminalNome', 'Nome do Terminal'),
-              _field('terminalSerial', 'Número de série', optional: true),
-              _field('terminalMac', 'Endereço MAC', optional: true),
-              _field('terminalIp', 'IP local', optional: true),
-              if (_error != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Text(
-                    _error!,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                ),
-              FilledButton(
-                onPressed: _loading ? null : _submit,
-                child: _loading
-                    ? const SizedBox.square(
-                        dimension: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('CRIAR EMPRESA'),
-              ),
-              const SizedBox(height: 24),
+              Expanded(child: a),
+              const SizedBox(width: AppSpacing.xl),
+              Expanded(child: b),
             ],
           ),
-        ),
+  );
+
+  Widget _groupLabel(String text) => Padding(
+    padding: const EdgeInsets.only(top: AppSpacing.md, bottom: AppSpacing.sm),
+    child: Text(
+      text,
+      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+        color: Theme.of(context).colorScheme.onSurfaceVariant,
+        letterSpacing: .5,
       ),
     ),
   );
+
+  List<Widget> _stepFields() => switch (_step) {
+    0 => [
+      _pair(
+        _field('gestorNome', 'Nome'),
+        _field('gestorSobrenome', 'Sobrenome'),
+      ),
+      _pair(
+        _field('gestorCpf', 'CPF', keyboard: TextInputType.number),
+        _field(
+          'gestorNascimento',
+          'Nascimento',
+          helper: 'Formato aaaa-mm-dd',
+          keyboard: TextInputType.datetime,
+        ),
+      ),
+      _pair(
+        _field('gestorEmail', 'E-mail', keyboard: TextInputType.emailAddress),
+        _field(
+          'gestorTelefone',
+          'Telefone',
+          optional: true,
+          keyboard: TextInputType.phone,
+        ),
+      ),
+      _field('gestorSenha', 'Senha', secret: true),
+    ],
+    1 => [
+      _pair(
+        _field('empresaCnpj', 'CNPJ', keyboard: TextInputType.number),
+        _field('razaoSocial', 'Razão social'),
+      ),
+      _field('nomeFantasia', 'Nome fantasia'),
+      _pair(
+        _field(
+          'empresaEmail',
+          'E-mail da empresa',
+          keyboard: TextInputType.emailAddress,
+        ),
+        _field(
+          'empresaTelefone',
+          'Telefone da empresa',
+          keyboard: TextInputType.phone,
+        ),
+      ),
+      _groupLabel('ENDEREÇO'),
+      _pair(
+        _field('cep', 'CEP', keyboard: TextInputType.number),
+        _field('logradouro', 'Logradouro'),
+      ),
+      _pair(_field('numero', 'Número'), _field('bairro', 'Bairro')),
+      _pair(_field('cidade', 'Cidade'), _field('estado', 'UF')),
+    ],
+    2 => [
+      _field('condominioNome', 'Nome do condomínio'),
+      _field('condominioCnpj', 'CNPJ do condomínio', optional: true),
+      Text(
+        'O condomínio usa o endereço informado na etapa Empresa.',
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+      ),
+    ],
+    _ => [
+      _field('terminalNome', 'Nome do Terminal'),
+      _pair(
+        _field('terminalSerial', 'Número de série', optional: true),
+        _field('terminalMac', 'Endereço MAC', optional: true),
+      ),
+      _field('terminalIp', 'IP local', optional: true),
+    ],
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final mobile = AppBreakpoints.isMobile(context);
+    final last = _step == _steps.length - 1;
+    final form = Form(
+      key: _form,
+      child: ListView(
+        padding: EdgeInsets.all(mobile ? AppSpacing.lg : AppSpacing.section),
+        children: [
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: AppLayout.formMaxWidth),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'PASSO ${_step + 1} DE ${_steps.length}',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    letterSpacing: .5,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(_steps[_step], style: theme.textTheme.headlineMedium),
+                const SizedBox(height: AppSpacing.xl),
+                ..._stepFields(),
+                if (_error != null) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  AppBanner(tone: AppStatusTone.critical, message: _error!),
+                ],
+                const SizedBox(height: AppSpacing.xl),
+                Row(
+                  children: [
+                    if (_step > 0)
+                      TextButton(
+                        onPressed: _loading
+                            ? null
+                            : () => setState(() => _step--),
+                        child: const Text('Voltar'),
+                      ),
+                    const Spacer(),
+                    FilledButton(
+                      onPressed: _loading ? null : _next,
+                      child: Text(
+                        _loading
+                            ? 'Criando…'
+                            : last
+                            ? 'Criar empresa'
+                            : 'Continuar',
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+    return Scaffold(
+      appBar: mobile
+          ? AppBar(title: const Text('Configurar nova empresa'))
+          : null,
+      body: SafeArea(
+        child: mobile
+            ? form
+            : Row(
+                children: [
+                  Container(
+                    width: 300,
+                    color: theme.colorScheme.surface,
+                    padding: const EdgeInsets.all(AppSpacing.xl),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        IconButton(
+                          tooltip: 'Voltar ao login',
+                          onPressed: () => Navigator.maybePop(context),
+                          icon: const Icon(Icons.arrow_back),
+                        ),
+                        const SizedBox(height: AppSpacing.lg),
+                        Text(
+                          'Configurar nova empresa',
+                          style: theme.textTheme.titleLarge,
+                        ),
+                        const SizedBox(height: AppSpacing.xs),
+                        Text(
+                          'Quatro etapas, enviadas juntas no final.',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.xl),
+                        for (var i = 0; i < _steps.length; i++)
+                          _StepRow(
+                            index: i,
+                            label: _steps[i],
+                            current: i == _step,
+                            done: i < _step,
+                          ),
+                      ],
+                    ),
+                  ),
+                  const VerticalDivider(width: 1),
+                  Expanded(child: form),
+                ],
+              ),
+      ),
+    );
+  }
+}
+
+class _StepRow extends StatelessWidget {
+  const _StepRow({
+    required this.index,
+    required this.label,
+    required this.current,
+    required this.done,
+  });
+  final int index;
+  final String label;
+  final bool current;
+  final bool done;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final colors = AppThemeColors.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      child: Row(
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: current
+                  ? scheme.primary
+                  : done
+                  ? colors.successSoft
+                  : null,
+              border: current || done
+                  ? null
+                  : Border.all(color: scheme.outline),
+            ),
+            child: done
+                ? Icon(Icons.check, size: 16, color: colors.success)
+                : Text(
+                    '${index + 1}',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: current
+                          ? scheme.onPrimary
+                          : scheme.onSurfaceVariant,
+                    ),
+                  ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Text(
+            label,
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: current ? scheme.onSurface : scheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

@@ -172,160 +172,155 @@ class _MercadoPagoPageState extends State<MercadoPagoPage> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: const Text('Mercado Pago'),
-      actions: [
-        IconButton(
-          tooltip: 'Atualizar',
-          onPressed: _loading || _working ? null : _load,
-          icon: const Icon(Icons.refresh),
-        ),
-      ],
-    ),
-    body: _loading
-        ? const AppLoadingState(label: 'Consultando configuração…')
-        : _error != null
-        ? AppErrorState(message: _error!, onRetry: _load)
-        : AppContent(child: _content()),
-  );
+  Widget build(BuildContext context) => _loading
+      ? const AppLoadingState(label: 'Consultando configuração…')
+      : _error != null
+      ? AppErrorState(message: _error!, onRetry: _load)
+      : RefreshIndicator(
+          onRefresh: _load,
+          child: ListView(children: [AppContent(child: _content())]),
+        );
+
+  String _terminalName(String? id) {
+    if (id == null) return '—';
+    for (final terminal in _terminals) {
+      if (terminal.id == id) return terminal.nome;
+    }
+    return id;
+  }
 
   Widget _content() {
     final setup = _setup!;
+    final theme = Theme.of(context);
+    final mobile = AppBreakpoints.isMobile(context);
+    final canLink =
+        !_working &&
+        _terminals.isNotEmpty &&
+        _points.any((point) => !point.vinculado);
+    final withoutPoint = _terminals
+        .where((terminal) => terminal.mercadoPagoTerminalId == null)
+        .toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         AppPageHeader(
-          title: 'Integração de pagamentos',
+          title: 'Mercado Pago',
           subtitle:
               'A conta pertence à Empresa; cada maquininha é vinculada a um Terminal.',
+          onRefresh: _load,
+          refreshing: _loading || _working,
           actions: [
-            if (!setup.contaVinculada)
+            if (setup.contaVinculada)
               FilledButton.icon(
-                onPressed: _working ? null : _oauth,
-                icon: const Icon(Icons.link),
-                label: const Text('Vincular conta'),
-              )
-            else
-              FilledButton.icon(
-                onPressed:
-                    _working ||
-                        _points.every((point) => point.vinculado) ||
-                        _terminals.isEmpty
-                    ? null
-                    : _configurePoint,
-                icon: const Icon(Icons.point_of_sale),
-                label: const Text('Configurar Point'),
+                onPressed: canLink ? _configurePoint : null,
+                icon: const Icon(Icons.link, size: 18),
+                label: const Text('Vincular Point'),
               ),
           ],
         ),
         const SizedBox(height: AppSpacing.xl),
-        Wrap(
-          spacing: AppSpacing.lg,
-          runSpacing: AppSpacing.lg,
-          children: [
-            _SetupCard(
-              title: 'Conta Mercado Pago',
-              description: setup.contaVinculada
-                  ? 'Conta vinculada à Empresa'
-                  : 'Vincule a conta para habilitar pagamentos',
-              ready: setup.contaVinculada,
-              icon: Icons.account_balance_wallet_outlined,
+        if (!setup.contaVinculada)
+          AppEmptyState(
+            icon: Icons.account_balance_wallet_outlined,
+            title: 'Vincule a conta para habilitar pagamentos',
+            message:
+                'Você será levado ao Mercado Pago para autorizar. Depois, volte e atualize esta tela.',
+            action: FilledButton(
+              onPressed: _working ? null : _oauth,
+              child: const Text('Vincular conta'),
             ),
-            _SetupCard(
-              title: 'Maquininhas Point',
-              description:
-                  '${setup.quantidadeMaquininhasVinculadas} de ${setup.quantidadeTerminais} Terminais configurados',
-              ready: setup.maquininhaVinculada,
-              icon: Icons.point_of_sale_outlined,
+          )
+        else ...[
+          AppListRow(
+            leading: const AppIconWell(Icons.account_balance_wallet_outlined),
+            title: 'Conta Mercado Pago',
+            meta: 'Vinculada à Empresa',
+            trailing: const AppStatusBadge(
+              label: 'Vinculada',
+              tone: AppStatusTone.success,
             ),
-          ],
-        ),
-        if (setup.contaVinculada) ...[
-          const SizedBox(height: AppSpacing.xxl),
-          Text(
-            'Points disponíveis',
-            style: Theme.of(context).textTheme.titleLarge,
           ),
-          const SizedBox(height: AppSpacing.md),
+          AppListRow(
+            leading: const AppIconWell(Icons.point_of_sale_outlined),
+            title: 'Maquininhas Point',
+            meta:
+                '${setup.quantidadeMaquininhasVinculadas} de ${setup.quantidadeTerminais} Terminais com Point',
+            trailing: setup.maquininhaVinculada
+                ? const AppStatusBadge(
+                    label: 'Configurado',
+                    tone: AppStatusTone.success,
+                  )
+                : const AppStatusBadge(
+                    label: 'Pendente',
+                    tone: AppStatusTone.warning,
+                  ),
+          ),
+          const SizedBox(height: AppSpacing.xxl),
+          const AppSectionTitle('Maquininhas Point'),
           if (_points.isEmpty)
-            const Card(
-              child: ListTile(
-                leading: Icon(Icons.info_outline),
-                title: Text('Nenhuma Point retornada pelo Mercado Pago'),
-                subtitle: Text(
-                  'Confirme se a maquininha está cadastrada na conta vinculada.',
-                ),
+            Text(
+              'Nenhuma Point retornada pelo Mercado Pago. Confirme se a maquininha está cadastrada na conta vinculada.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             )
+          else if (mobile)
+            for (final point in _points)
+              AppListRow(
+                title: point.externalPosId ?? point.posId ?? point.id,
+                meta: point.vinculado
+                    ? 'Terminal ${_terminalName(point.terminalInternoId)}'
+                    : 'Sem Terminal',
+                trailing: _pointBadge(point),
+              )
           else
-            ..._points.map(
-              (point) => Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                child: Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.point_of_sale),
-                    title: Text(point.externalPosId ?? point.posId ?? point.id),
-                    subtitle: Text(
-                      [
-                        if (point.store != null) 'Loja: ${point.store}',
-                        if (point.operationMode != null)
-                          'Modo: ${point.operationMode}',
-                        if (point.terminalInternoId != null)
-                          'Terminal: ${point.terminalInternoId}',
-                      ].join(' • '),
-                    ),
-                    trailing: AppStatusBadge(
-                      label: point.vinculado ? 'Vinculada' : 'Disponível',
-                      tone: point.vinculado
-                          ? AppStatusTone.success
-                          : AppStatusTone.info,
-                    ),
+            AppTable(
+              columns: const [
+                DataColumn(label: Text('Point')),
+                DataColumn(label: Text('Loja')),
+                DataColumn(label: Text('Modo')),
+                DataColumn(label: Text('Terminal')),
+                DataColumn(label: Text('Status')),
+              ],
+              rows: [
+                for (final point in _points)
+                  DataRow(
+                    cells: [
+                      DataCell(
+                        Text(
+                          point.externalPosId ?? point.posId ?? point.id,
+                          style: theme.textTheme.titleSmall,
+                        ),
+                      ),
+                      DataCell(Text(point.store ?? '—')),
+                      DataCell(Text(point.operationMode ?? '—')),
+                      DataCell(Text(_terminalName(point.terminalInternoId))),
+                      DataCell(_pointBadge(point)),
+                    ],
                   ),
-                ),
-              ),
+              ],
             ),
+          if (withoutPoint.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.xl),
+            AppBanner(
+              tone: AppStatusTone.info,
+              message: withoutPoint.length == 1
+                  ? '${withoutPoint.first.nome} ainda não tem Point vinculada.'
+                  : '${withoutPoint.length} Terminais ainda não têm Point vinculada.',
+              action: canLink
+                  ? TextButton(
+                      onPressed: _configurePoint,
+                      child: const Text('Vincular'),
+                    )
+                  : null,
+            ),
+          ],
         ],
       ],
     );
   }
-}
 
-class _SetupCard extends StatelessWidget {
-  const _SetupCard({
-    required this.title,
-    required this.description,
-    required this.ready,
-    required this.icon,
-  });
-  final String title;
-  final String description;
-  final bool ready;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) => SizedBox(
-    width: 360,
-    child: Card(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.xl),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, size: 32, color: Theme.of(context).colorScheme.primary),
-            const SizedBox(height: AppSpacing.lg),
-            Text(title, style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: AppSpacing.xs),
-            Text(description),
-            const SizedBox(height: AppSpacing.lg),
-            AppStatusBadge(
-              label: ready ? 'Configurado' : 'Pendente',
-              tone: ready ? AppStatusTone.success : AppStatusTone.warning,
-              icon: ready ? Icons.check_circle : Icons.schedule,
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
+  static AppStatusBadge _pointBadge(MercadoPagoPoint point) => point.vinculado
+      ? const AppStatusBadge(label: 'Vinculada', tone: AppStatusTone.success)
+      : const AppStatusBadge(label: 'Disponível', tone: AppStatusTone.info);
 }

@@ -7,6 +7,25 @@ import '../../core/widgets/async_state.dart';
 import '../../core/widgets/status_badge.dart';
 import '../model/admin_history.dart';
 import '../model/admin_repository.dart';
+import 'admin_sale_detail_page.dart';
+
+const _processingLabels = {
+  'PROCESSED': 'Processado',
+  'PENDING': 'Pendente',
+  'ACTION_REQUIRED': 'Ação necessária',
+  'FAILED': 'Falhou',
+};
+
+AppStatusBadge _processingBadge(String status) => AppStatusBadge(
+  label: _processingLabels[status] ?? status,
+  tone: switch (status) {
+    'PROCESSED' => AppStatusTone.success,
+    'PENDING' => AppStatusTone.warning,
+    'ACTION_REQUIRED' => AppStatusTone.info,
+    'FAILED' => AppStatusTone.critical,
+    _ => AppStatusTone.neutral,
+  },
+);
 
 class SalesHistoryPage extends StatelessWidget {
   const SalesHistoryPage({super.key, this.repository});
@@ -17,29 +36,56 @@ class SalesHistoryPage extends StatelessWidget {
     final source = repository ?? AdminRepository();
     return _AdminHistoryPage<AdminSale>(
       title: 'Histórico de vendas',
-      subtitle: 'Vendas processadas e faturamento por período.',
-      filterLabel: 'Período',
+      subtitle: 'Vendas aprovadas e reembolsadas por período.',
       initialFilter: 'TODAY',
       filters: const {
         'TODAY': 'Hoje',
         '7D': 'Últimos 7 dias',
         '30D': 'Últimos 30 dias',
       },
-      fetch: (page, filter) => source.sales(page: page, period: filter),
-      itemBuilder: (context, sale) => ListTile(
-        leading: const CircleAvatar(child: Icon(Icons.receipt_long_outlined)),
-        title: Text(AppFormatters.currencyText(sale.total.persistence)),
-        subtitle: Text(
-          '${sale.condominioNome} • ${sale.terminalNome}\n'
-          '${AppFormatters.dateTime(sale.pagaEm ?? sale.criadaEm)}',
+      secondaryInitialFilter: 'PROCESSED',
+      secondaryFilters: const {
+        'PROCESSED': 'Aprovadas',
+        'REFUNDED': 'Reembolsadas',
+      },
+      fetch: (page, filter, status) =>
+          source.sales(page: page, period: filter, status: status),
+      onTap: (context, sale) => Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+          builder: (_) =>
+              AdminSaleDetailPage(orderId: sale.id, repository: source),
         ),
-        isThreeLine: true,
-        trailing: AppStatusBadge(
-          label: sale.status,
-          tone: sale.status == 'PROCESSED'
-              ? AppStatusTone.success
-              : AppStatusTone.neutral,
+      ),
+      columns: const [
+        _Column('Venda'),
+        _Column('Data e hora'),
+        _Column('Condomínio'),
+        _Column('Terminal'),
+        _Column('Total', numeric: true),
+        _Column('Status'),
+      ],
+      cells: (sale) => [
+        Text(shortSaleId(sale.id), style: tabularFigures),
+        Text(
+          AppFormatters.dateTime(sale.pagaEm ?? sale.criadaEm),
+          style: tabularFigures,
         ),
+        Text(sale.condominioNome),
+        Text(sale.terminalNome),
+        Text(
+          AppFormatters.currencyText(sale.total.persistence),
+          style: tabularFigures.copyWith(fontWeight: FontWeight.w600),
+        ),
+        saleStatusBadge(sale.status),
+      ],
+      row: (sale) => (
+        title: AppFormatters.currencyText(sale.total.persistence),
+        meta:
+            '${shortSaleId(sale.id)} · '
+            '${AppFormatters.dateTime(sale.pagaEm ?? sale.criadaEm)}\n'
+            '${sale.condominioNome} · ${sale.terminalNome}',
+        trailing: saleStatusBadge(sale.status),
       ),
     );
   }
@@ -54,9 +100,7 @@ class PaymentHistoryPage extends StatelessWidget {
     final source = repository ?? AdminRepository();
     return _AdminHistoryPage<AdminPayment>(
       title: 'Histórico de pagamentos',
-      subtitle:
-          'Tentativas de pagamento paginadas, sem expor eventos técnicos crus.',
-      filterLabel: 'Status',
+      subtitle: 'Tentativas de pagamento por pedido.',
       initialFilter: '',
       filters: const {
         '': 'Todos',
@@ -65,30 +109,42 @@ class PaymentHistoryPage extends StatelessWidget {
         'FAILED': 'Falhou',
         'PROCESSED': 'Processado',
       },
-      fetch: (page, filter) =>
+      fetch: (page, filter, _) =>
           source.payments(page: page, status: filter.isEmpty ? null : filter),
-      itemBuilder: (context, payment) => ListTile(
-        leading: const CircleAvatar(child: Icon(Icons.payments_outlined)),
-        title: Text(AppFormatters.currencyText(payment.valor.persistence)),
-        subtitle: Text(
-          '${payment.terminalNome} • ${payment.provider}\n'
-          '${AppFormatters.dateTime(payment.atualizadaEm)}',
+      columns: const [
+        _Column('Atualizado em'),
+        _Column('Pedido'),
+        _Column('Terminal'),
+        _Column('Provedor'),
+        _Column('Valor', numeric: true),
+        _Column('Status'),
+      ],
+      cells: (payment) => [
+        Text(
+          AppFormatters.dateTime(payment.atualizadaEm),
+          style: tabularFigures,
         ),
-        isThreeLine: true,
-        trailing: AppStatusBadge(
-          label: payment.status,
-          tone: _paymentTone(payment.status),
+        Text(_shortId(payment.orderId), style: tabularFigures),
+        Text(payment.terminalNome),
+        Text(payment.provider),
+        Text(
+          AppFormatters.currencyText(payment.valor.persistence),
+          style: tabularFigures.copyWith(fontWeight: FontWeight.w600),
         ),
+        _processingBadge(payment.status),
+      ],
+      row: (payment) => (
+        title: AppFormatters.currencyText(payment.valor.persistence),
+        meta:
+            '${payment.terminalNome} · ${payment.provider}\n'
+            '${AppFormatters.dateTime(payment.atualizadaEm)}',
+        trailing: _processingBadge(payment.status),
       ),
     );
   }
 
-  static AppStatusTone _paymentTone(String status) => switch (status) {
-    'PROCESSED' => AppStatusTone.success,
-    'FAILED' || 'ACTION_REQUIRED' => AppStatusTone.critical,
-    'PENDING' => AppStatusTone.warning,
-    _ => AppStatusTone.neutral,
-  };
+  static String _shortId(String id) =>
+      id.length > 8 ? '#${id.substring(0, 8)}' : '#$id';
 }
 
 class AdminAlertsPage extends StatelessWidget {
@@ -101,60 +157,102 @@ class AdminAlertsPage extends StatelessWidget {
     return _AdminHistoryPage<AdminAlert>(
       title: 'Alertas operacionais',
       subtitle: 'Alertas dos Terminais calculados pelo backend.',
-      filterLabel: 'Situação',
       initialFilter: 'ACTIVE',
       filters: const {
         'ACTIVE': 'Ativos',
         'RESOLVED': 'Resolvidos',
         '': 'Todos',
       },
-      fetch: (page, filter) =>
+      fetch: (page, filter, _) =>
           source.alerts(page: page, status: filter.isEmpty ? null : filter),
-      itemBuilder: (context, alert) => ListTile(
-        leading: CircleAvatar(
-          child: Icon(
-            alert.severidade == 'CRITICAL'
-                ? Icons.error_outline
-                : Icons.warning_amber_outlined,
-          ),
-        ),
-        title: Text(alert.terminalNome),
-        subtitle: Text(
-          '${alert.condominioNome} • ${alert.mensagem}\n'
-          '${AppFormatters.dateTime(alert.ultimaOcorrenciaEm)}',
-        ),
-        isThreeLine: true,
-        trailing: AppStatusBadge(
-          label: alert.severidade == 'CRITICAL' ? 'Crítico' : 'Atenção',
-          tone: alert.severidade == 'CRITICAL'
-              ? AppStatusTone.critical
-              : AppStatusTone.warning,
-        ),
+      row: (alert) {
+        final resolved = alert.status == 'RESOLVED';
+        return (
+          title: '${alert.terminalNome} · ${_type(alert.tipo)}',
+          meta:
+              '${alert.mensagem}\n${alert.condominioNome} · '
+              '${AppFormatters.dateTime(alert.ultimaOcorrenciaEm)}',
+          trailing: resolved
+              ? const AppStatusBadge(label: 'Resolvido')
+              : AppStatusBadge(
+                  label: alert.severidade == 'CRITICAL' ? 'Crítico' : 'Atenção',
+                  tone: alert.severidade == 'CRITICAL'
+                      ? AppStatusTone.critical
+                      : AppStatusTone.warning,
+                ),
+        );
+      },
+      leading: (alert) => AppIconWell(
+        alert.severidade == 'CRITICAL'
+            ? Icons.error_outline
+            : Icons.warning_amber_outlined,
+        color: alert.status == 'RESOLVED'
+            ? Theme.of(context).colorScheme.onSurfaceVariant
+            : appToneColors(
+                context,
+                alert.severidade == 'CRITICAL'
+                    ? AppStatusTone.critical
+                    : AppStatusTone.warning,
+              ).$2,
       ),
+      muted: (alert) => alert.status == 'RESOLVED',
     );
+  }
+
+  static String _type(String tipo) {
+    final words = tipo.replaceAll('_', ' ').toLowerCase();
+    return words.isEmpty
+        ? words
+        : '${words[0].toUpperCase()}${words.substring(1)}';
   }
 }
 
-typedef _Fetcher<T> = Future<AdminPage<T>> Function(int page, String filter);
-typedef _ItemBuilder<T> = Widget Function(BuildContext context, T item);
+typedef _Fetcher<T> =
+    Future<AdminPage<T>> Function(int page, String filter, String? secondary);
+typedef _OnTap<T> = Future<bool?> Function(BuildContext context, T item);
+typedef _RowSpec = ({String title, String meta, Widget trailing});
+
+class _Column {
+  const _Column(this.label, {this.numeric = false});
+  final String label;
+  final bool numeric;
+}
 
 class _AdminHistoryPage<T> extends StatefulWidget {
   const _AdminHistoryPage({
     required this.title,
     required this.subtitle,
-    required this.filterLabel,
     required this.initialFilter,
     required this.filters,
     required this.fetch,
-    required this.itemBuilder,
+    required this.row,
+    this.columns,
+    this.cells,
+    this.leading,
+    this.muted,
+    this.onTap,
+    this.secondaryFilters,
+    this.secondaryInitialFilter,
   });
   final String title;
   final String subtitle;
-  final String filterLabel;
   final String initialFilter;
   final Map<String, String> filters;
   final _Fetcher<T> fetch;
-  final _ItemBuilder<T> itemBuilder;
+
+  /// Linha usada no celular e quando a página não tem tabela.
+  final _RowSpec Function(T item) row;
+  final List<_Column>? columns;
+  final List<Widget> Function(T item)? cells;
+  final Widget Function(T item)? leading;
+  final bool Function(T item)? muted;
+
+  /// Abre o detalhe do item; `true` no retorno recarrega a página atual.
+  final _OnTap<T>? onTap;
+
+  /// Segunda fileira de filtros (ex.: status), combinada com [filters].
+  final Map<String, String>? secondaryFilters;
+  final String? secondaryInitialFilter;
 
   @override
   State<_AdminHistoryPage<T>> createState() => _AdminHistoryPageState<T>();
@@ -162,6 +260,7 @@ class _AdminHistoryPage<T> extends StatefulWidget {
 
 class _AdminHistoryPageState<T> extends State<_AdminHistoryPage<T>> {
   late String _filter = widget.initialFilter;
+  late String? _secondary = widget.secondaryInitialFilter;
   AdminPage<T>? _data;
   bool _loading = true;
   String? _error;
@@ -178,7 +277,7 @@ class _AdminHistoryPageState<T> extends State<_AdminHistoryPage<T>> {
       _error = null;
     });
     try {
-      final result = await widget.fetch(page, _filter);
+      final result = await widget.fetch(page, _filter, _secondary);
       if (mounted) setState(() => _data = result);
     } catch (error) {
       if (mounted) setState(() => _error = error.toString());
@@ -187,128 +286,163 @@ class _AdminHistoryPageState<T> extends State<_AdminHistoryPage<T>> {
     }
   }
 
+  Future<void> _open(T item) async {
+    final changed = await widget.onTap!(context, item);
+    if (changed == true && mounted) _load(_data?.page ?? 0);
+  }
+
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: Text(widget.title)),
-    body: _loading && _data == null
-        ? const AppLoadingState()
-        : _error != null && _data == null
-        ? AppErrorState(message: _error!, onRetry: () => _load(0))
-        : RefreshIndicator(
-            onRefresh: () => _load(_data?.page ?? 0),
-            child: ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final mobile = AppBreakpoints.isMobile(context);
+    final data = _data;
+    final useTable = !mobile && widget.columns != null && widget.cells != null;
+    return RefreshIndicator(
+      onRefresh: () => _load(data?.page ?? 0),
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          AppContent(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                AppContent(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      AppPageHeader(
-                        title: widget.title,
-                        subtitle: widget.subtitle,
-                        actions: [
-                          SizedBox(
-                            width: 210,
-                            child: DropdownButtonFormField<String>(
-                              initialValue: _filter,
-                              decoration: InputDecoration(
-                                labelText: widget.filterLabel,
-                              ),
-                              items: widget.filters.entries
-                                  .map(
-                                    (entry) => DropdownMenuItem(
-                                      value: entry.key,
-                                      child: Text(entry.value),
-                                    ),
-                                  )
-                                  .toList(),
-                              onChanged: _loading
-                                  ? null
-                                  : (value) {
-                                      _filter = value ?? widget.initialFilter;
-                                      _load(0);
-                                    },
-                            ),
-                          ),
-                          IconButton(
-                            tooltip: 'Atualizar',
-                            onPressed: _loading
-                                ? null
-                                : () => _load(_data?.page ?? 0),
-                            icon: const Icon(Icons.refresh),
-                          ),
-                        ],
+                AppPageHeader(
+                  title: widget.title,
+                  subtitle: widget.subtitle,
+                  onRefresh: () => _load(data?.page ?? 0),
+                  refreshing: _loading,
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                Wrap(
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.sm,
+                  children: [
+                    for (final entry in widget.filters.entries)
+                      ChoiceChip(
+                        label: Text(entry.value),
+                        selected: _filter == entry.key,
+                        onSelected: _loading
+                            ? null
+                            : (_) {
+                                setState(() => _filter = entry.key);
+                                _load(0);
+                              },
                       ),
-                      const SizedBox(height: AppSpacing.xl),
-                      if (_error != null)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                          child: Text(
-                            _error!,
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.error,
-                            ),
-                          ),
+                  ],
+                ),
+                if (widget.secondaryFilters != null) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  Wrap(
+                    spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.sm,
+                    children: [
+                      for (final entry in widget.secondaryFilters!.entries)
+                        ChoiceChip(
+                          label: Text(entry.value),
+                          selected: _secondary == entry.key,
+                          onSelected: _loading
+                              ? null
+                              : (_) {
+                                  setState(() => _secondary = entry.key);
+                                  _load(0);
+                                },
                         ),
-                      if (_data!.items.isEmpty)
-                        const Card(
-                          child: ListTile(
-                            leading: Icon(Icons.search_off_outlined),
-                            title: Text(
-                              'Nenhum registro no filtro selecionado',
-                            ),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: AppSpacing.lg),
+                if (_loading && data == null)
+                  const AppLoadingState()
+                else if (_error != null && data == null)
+                  AppErrorState(message: _error!, onRetry: () => _load(0))
+                else ...[
+                  if (_error != null)
+                    AppBanner(tone: AppStatusTone.critical, message: _error!),
+                  if (_loading) const LinearProgressIndicator(minHeight: 2),
+                  if (data!.items.isEmpty)
+                    const AppEmptyState(
+                      icon: Icons.search_off_outlined,
+                      title: 'Nenhum registro no filtro selecionado',
+                      message: 'Escolha outro período ou situação.',
+                    )
+                  else if (useTable)
+                    AppTable(
+                      columns: [
+                        for (final column in widget.columns!)
+                          DataColumn(
+                            label: Text(column.label),
+                            numeric: column.numeric,
                           ),
-                        )
-                      else
-                        Card(
-                          child: Column(
-                            children: [
-                              for (
-                                var index = 0;
-                                index < _data!.items.length;
-                                index++
-                              ) ...[
-                                widget.itemBuilder(
-                                  context,
-                                  _data!.items[index],
-                                ),
-                                if (index != _data!.items.length - 1)
-                                  const Divider(height: 1, indent: 72),
-                              ],
+                      ],
+                      rows: [
+                        for (final item in data.items)
+                          DataRow(
+                            onSelectChanged: widget.onTap == null
+                                ? null
+                                : (_) => _open(item),
+                            cells: [
+                              for (final cell in widget.cells!(item))
+                                DataCell(cell),
                             ],
                           ),
+                      ],
+                    )
+                  else
+                    for (final item in data.items)
+                      Builder(
+                        builder: (context) {
+                          final spec = widget.row(item);
+                          return AppListRow(
+                            title: spec.title,
+                            meta: spec.meta,
+                            leading: widget.leading?.call(item),
+                            trailing: spec.trailing,
+                            muted: widget.muted?.call(item) ?? false,
+                            onTap: widget.onTap == null
+                                ? null
+                                : () => _open(item),
+                          );
+                        },
+                      ),
+                  const SizedBox(height: AppSpacing.md),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Text(
+                        data.totalElements == 1
+                            ? '1 registro'
+                            : '${data.totalElements} registros',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
                         ),
-                      const SizedBox(height: AppSpacing.lg),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          Text('${_data!.totalElements} registros'),
-                          const SizedBox(width: AppSpacing.lg),
-                          IconButton(
-                            tooltip: 'Página anterior',
-                            onPressed: _loading || _data!.page == 0
-                                ? null
-                                : () => _load(_data!.page - 1),
-                            icon: const Icon(Icons.chevron_left),
-                          ),
-                          Text(
-                            '${_data!.page + 1} / ${_data!.totalPages == 0 ? 1 : _data!.totalPages}',
-                          ),
-                          IconButton(
-                            tooltip: 'Próxima página',
-                            onPressed:
-                                _loading || _data!.page + 1 >= _data!.totalPages
-                                ? null
-                                : () => _load(_data!.page + 1),
-                            icon: const Icon(Icons.chevron_right),
-                          ),
-                        ],
+                      ),
+                      const SizedBox(width: AppSpacing.lg),
+                      IconButton(
+                        tooltip: 'Página anterior',
+                        onPressed: _loading || data.page == 0
+                            ? null
+                            : () => _load(data.page - 1),
+                        icon: const Icon(Icons.chevron_left),
+                      ),
+                      Text(
+                        '${data.page + 1} de ${data.totalPages == 0 ? 1 : data.totalPages}',
+                        style: tabularFigures,
+                      ),
+                      IconButton(
+                        tooltip: 'Próxima página',
+                        onPressed: _loading || data.page + 1 >= data.totalPages
+                            ? null
+                            : () => _load(data.page + 1),
+                        icon: const Icon(Icons.chevron_right),
                       ),
                     ],
                   ),
-                ),
+                ],
               ],
             ),
           ),
-  );
+        ],
+      ),
+    );
+  }
 }

@@ -2,18 +2,34 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../core/theme/app_tokens.dart';
+import '../../core/widgets/app_content.dart';
+import '../../core/widgets/async_state.dart';
+import '../../core/widgets/status_badge.dart';
 import '../model/terminal_telemetry.dart';
 import '../model/terminal_telemetry_repository.dart';
 import 'terminal_telemetry_detail_page.dart';
 
+AppStatusTone telemetryStatusTone(TerminalOperationalStatus status) =>
+    switch (status) {
+      TerminalOperationalStatus.saudavel => AppStatusTone.success,
+      TerminalOperationalStatus.atencao => AppStatusTone.warning,
+      TerminalOperationalStatus.critico => AppStatusTone.critical,
+      TerminalOperationalStatus.offline => AppStatusTone.neutral,
+    };
+
+/// Cor de texto acessível do status (a mesma do badge).
 Color telemetryStatusColor(
   BuildContext context,
   TerminalOperationalStatus status,
-) => switch (status) {
-  TerminalOperationalStatus.saudavel => Colors.green.shade700,
-  TerminalOperationalStatus.atencao => Colors.orange.shade800,
-  TerminalOperationalStatus.critico => Theme.of(context).colorScheme.error,
-  TerminalOperationalStatus.offline => Colors.grey.shade700,
+) => appToneColors(context, telemetryStatusTone(status)).$2;
+
+String telemetryWifiLabel(String? quality) => switch (quality) {
+  'EXCELENTE' => 'Excelente',
+  'BOM' => 'Bom',
+  'MEDIO' => 'Médio',
+  'FRACO' => 'Fraco',
+  _ => 'Indisponível',
 };
 
 String telemetryRelativeTime(DateTime? value) {
@@ -97,354 +113,293 @@ class _MonitoringDashboardPageState extends State<MonitoringDashboardPage> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: const Text('Monitoramento'),
-      actions: [
-        IconButton(
-          tooltip: 'Atualizar',
-          onPressed: _refreshing ? null : _load,
-          icon: const Icon(Icons.refresh),
-        ),
-      ],
-    ),
-    body: RefreshIndicator(
-      onRefresh: _load,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          if (_dashboard case final dashboard?) _Summary(dashboard: dashboard),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              SizedBox(
-                width: 220,
-                child: DropdownButtonFormField<TerminalOperationalStatus?>(
-                  initialValue: _status,
-                  isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'Status'),
-                  items: [
-                    const DropdownMenuItem(value: null, child: Text('Todos')),
-                    ...TerminalOperationalStatus.values.map(
-                      (value) => DropdownMenuItem(
-                        value: value,
-                        child: Text(value.label),
-                      ),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    _status = value;
-                    _load();
-                  },
-                ),
-              ),
-              SizedBox(
-                width: 280,
-                child: DropdownButtonFormField<String?>(
-                  initialValue: _condominioId,
-                  isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'Condomínio'),
-                  items: [
-                    const DropdownMenuItem(
-                      value: null,
-                      child: Text('Todos os condomínios'),
-                    ),
-                    ..._condominios.entries.map(
-                      (entry) => DropdownMenuItem(
-                        value: entry.key,
-                        child: Text(entry.value),
-                      ),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    _condominioId = value;
-                    _load();
-                  },
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          if (_loading && _dashboard == null)
-            const Padding(
-              padding: EdgeInsets.all(48),
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else if (_error != null && _dashboard == null)
-            _DashboardState(
-              icon: Icons.cloud_off,
-              title: 'Não foi possível carregar os Terminais',
-              message: _error!,
-              onRetry: _load,
-            )
-          else if (_dashboard?.terminals.isEmpty ?? true)
-            _DashboardState(
-              icon: Icons.monitor_heart_outlined,
-              title: 'Nenhum Terminal encontrado',
-              message:
-                  'Ajuste os filtros ou aguarde o cadastro dos equipamentos.',
-              onRetry: _load,
-            )
-          else
-            ..._dashboard!.terminals.map(
-              (terminal) => _TerminalCard(
-                terminal: terminal,
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => TerminalTelemetryDetailPage(
-                      terminalId: terminal.terminalId,
-                      repository: _repository,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-        ],
+  void _open(TerminalTelemetry terminal) => Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => TerminalTelemetryDetailPage(
+        terminalId: terminal.terminalId,
+        repository: _repository,
       ),
     ),
   );
-}
 
-class _Summary extends StatelessWidget {
-  const _Summary({required this.dashboard});
-  final MonitoringDashboard dashboard;
-  @override
-  Widget build(BuildContext context) => Wrap(
-    spacing: 10,
-    runSpacing: 10,
-    children: [
-      _SummaryItem(
-        label: 'Terminais',
-        value: dashboard.total,
-        color: Theme.of(context).colorScheme.primary,
-      ),
-      _SummaryItem(
-        label: 'Online',
-        value: dashboard.online,
-        color: Colors.blue.shade700,
-      ),
-      _SummaryItem(
-        label: 'Saudáveis',
-        value: dashboard.saudaveis,
-        color: Colors.green.shade700,
-      ),
-      _SummaryItem(
-        label: 'Atenção',
-        value: dashboard.atencao,
-        color: Colors.orange.shade800,
-      ),
-      _SummaryItem(
-        label: 'Críticos',
-        value: dashboard.criticos,
-        color: Theme.of(context).colorScheme.error,
-      ),
-      _SummaryItem(
-        label: 'Offline',
-        value: dashboard.offline,
-        color: Colors.grey.shade700,
-      ),
-    ],
-  );
-}
-
-class _SummaryItem extends StatelessWidget {
-  const _SummaryItem({
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-  final String label;
-  final int value;
-  final Color color;
-  @override
-  Widget build(BuildContext context) => SizedBox(
-    width: 145,
-    child: Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '$value',
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                color: color,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            Text(label),
-          ],
-        ),
-      ),
-    ),
-  );
-}
-
-class _TerminalCard extends StatelessWidget {
-  const _TerminalCard({required this.terminal, required this.onTap});
-  final TerminalTelemetry terminal;
-  final VoidCallback onTap;
-
-  String metric(num? value, {String suffix = '%'}) =>
-      value == null ? 'Indisponível' : '${value.toStringAsFixed(0)}$suffix';
+  static int _severity(TerminalOperationalStatus status) => switch (status) {
+    TerminalOperationalStatus.critico => 0,
+    TerminalOperationalStatus.atencao => 1,
+    TerminalOperationalStatus.offline => 2,
+    TerminalOperationalStatus.saudavel => 3,
+  };
 
   @override
   Widget build(BuildContext context) {
-    final color = telemetryStatusColor(context, terminal.status);
-    final system = terminal.system;
-    final reasons = terminal.reasons
-        .where((item) => item != 'Telemetria ainda não recebida')
-        .toList();
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    terminal.online ? Icons.circle : Icons.circle_outlined,
-                    size: 14,
-                    color: color,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          terminal.terminalNome,
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                        Text(terminal.condominioNome),
-                      ],
-                    ),
-                  ),
-                  Chip(
-                    avatar: Icon(
-                      terminal.status == TerminalOperationalStatus.critico
-                          ? Icons.error
-                          : terminal.status == TerminalOperationalStatus.atencao
-                          ? Icons.warning_amber
-                          : Icons.monitor_heart,
-                      color: color,
-                      size: 18,
-                    ),
-                    label: Text(terminal.status.label),
-                  ),
-                ],
-              ),
-              if (reasons.isNotEmpty) ...[
-                const SizedBox(height: 10),
-                Text(
-                  reasons.join(' • '),
-                  style: TextStyle(color: color, fontWeight: FontWeight.w600),
+    final dashboard = _dashboard;
+    final terminals = [...?dashboard?.terminals]
+      ..sort((a, b) => _severity(a.status).compareTo(_severity(b.status)));
+    final mobile = AppBreakpoints.isMobile(context);
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        children: [
+          AppContent(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                AppPageHeader(
+                  title: 'Monitoramento',
+                  subtitle: dashboard == null
+                      ? 'Saúde dos Terminais, atualizada a cada 20 s.'
+                      : '${dashboard.total} Terminais · '
+                            '${dashboard.online} online · atualizado a cada 20 s',
+                  onRefresh: _load,
+                  refreshing: _refreshing,
                 ),
-              ],
-              const SizedBox(height: 14),
-              Wrap(
-                spacing: 20,
-                runSpacing: 8,
-                children: [
-                  _Metric(label: 'CPU', value: metric(system?.cpuUsagePercent)),
-                  _Metric(
-                    label: 'Temperatura',
-                    value: metric(system?.cpuTemperatureCelsius, suffix: '°C'),
-                  ),
-                  _Metric(
-                    label: 'RAM',
-                    value: metric(system?.memoryUsagePercent),
-                  ),
-                  _Metric(
-                    label: 'Disco',
-                    value: metric(system?.diskUsagePercent),
-                  ),
-                  _Metric(
-                    label: 'Wi-Fi',
-                    value: switch (terminal.network?.wifiSignalQuality) {
-                      'EXCELENTE' => 'Excelente',
-                      'BOM' => 'Bom',
-                      'MEDIO' => 'Médio',
-                      'FRACO' => 'Fraco',
-                      _ => 'Indisponível',
-                    },
-                  ),
+                const SizedBox(height: AppSpacing.xl),
+                if (dashboard != null) ...[
+                  _Summary(dashboard: dashboard),
+                  const SizedBox(height: AppSpacing.lg),
                 ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Último sinal: ${telemetryRelativeTime(terminal.lastHeartbeatAt)}',
+                Wrap(
+                  spacing: AppSpacing.xl,
+                  runSpacing: AppSpacing.md,
+                  children: [
+                    SizedBox(
+                      width: mobile ? double.infinity : 280,
+                      child: DropdownButtonFormField<String?>(
+                        initialValue: _condominioId,
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Condomínio',
+                        ),
+                        items: [
+                          const DropdownMenuItem(
+                            value: null,
+                            child: Text('Todos os condomínios'),
+                          ),
+                          ..._condominios.entries.map(
+                            (entry) => DropdownMenuItem(
+                              value: entry.key,
+                              child: Text(entry.value),
+                            ),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          _condominioId = value;
+                          _load();
+                        },
+                      ),
                     ),
-                  ),
-                  TextButton(
-                    onPressed: onTap,
-                    child: const Text('VER DETALHES'),
-                  ),
-                ],
-              ),
-            ],
+                    SizedBox(
+                      width: mobile ? double.infinity : 200,
+                      child:
+                          DropdownButtonFormField<TerminalOperationalStatus?>(
+                            initialValue: _status,
+                            isExpanded: true,
+                            decoration: const InputDecoration(
+                              labelText: 'Status',
+                            ),
+                            items: [
+                              const DropdownMenuItem(
+                                value: null,
+                                child: Text('Todos'),
+                              ),
+                              ...TerminalOperationalStatus.values.map(
+                                (value) => DropdownMenuItem(
+                                  value: value,
+                                  child: Text(value.label),
+                                ),
+                              ),
+                            ],
+                            onChanged: (value) {
+                              _status = value;
+                              _load();
+                            },
+                          ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                if (_loading && dashboard == null)
+                  const AppLoadingState(label: 'Carregando Terminais…')
+                else if (_error != null && dashboard == null)
+                  AppErrorState(
+                    title: 'Não foi possível carregar os Terminais',
+                    message: _error!,
+                    onRetry: _load,
+                  )
+                else if (terminals.isEmpty)
+                  AppEmptyState(
+                    icon: Icons.monitor_heart_outlined,
+                    title: 'Nenhum Terminal encontrado',
+                    message:
+                        'Ajuste os filtros ou aguarde o cadastro dos equipamentos.',
+                    action: OutlinedButton(
+                      onPressed: _load,
+                      child: const Text('Tentar novamente'),
+                    ),
+                  )
+                else if (mobile)
+                  for (final terminal in terminals)
+                    _TerminalRow(
+                      terminal: terminal,
+                      onTap: () => _open(terminal),
+                    )
+                else
+                  _TerminalTable(terminals: terminals, onOpen: _open),
+              ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
 }
 
-class _Metric extends StatelessWidget {
-  const _Metric({required this.label, required this.value});
-  final String label;
-  final String value;
+class _Summary extends StatelessWidget {
+  const _Summary({required this.dashboard});
+  final MonitoringDashboard dashboard;
+
   @override
-  Widget build(BuildContext context) => SizedBox(
-    width: 115,
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: Theme.of(context).textTheme.bodySmall),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
-      ],
-    ),
+  Widget build(BuildContext context) => Wrap(
+    spacing: AppSpacing.xl,
+    runSpacing: AppSpacing.sm,
+    children: [
+      AppStatusDot(
+        label: '${dashboard.saudaveis} saudáveis',
+        tone: AppStatusTone.success,
+      ),
+      AppStatusDot(
+        label: '${dashboard.atencao} em atenção',
+        tone: AppStatusTone.warning,
+      ),
+      AppStatusDot(
+        label: '${dashboard.criticos} críticos',
+        tone: AppStatusTone.critical,
+      ),
+      AppStatusDot(
+        label: '${dashboard.offline} offline',
+        tone: AppStatusTone.neutral,
+      ),
+    ],
   );
 }
 
-class _DashboardState extends StatelessWidget {
-  const _DashboardState({
-    required this.icon,
-    required this.title,
-    required this.message,
-    required this.onRetry,
-  });
-  final IconData icon;
-  final String title;
-  final String message;
-  final VoidCallback onRetry;
+String _metric(num? value, {String suffix = '%'}) =>
+    value == null ? '—' : '${value.toStringAsFixed(0)}$suffix';
+
+List<String> _reasons(TerminalTelemetry terminal) => terminal.reasons
+    .where((item) => item != 'Telemetria ainda não recebida')
+    .toList();
+
+class _TerminalTable extends StatelessWidget {
+  const _TerminalTable({required this.terminals, required this.onOpen});
+  final List<TerminalTelemetry> terminals;
+  final ValueChanged<TerminalTelemetry> onOpen;
+
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 52),
-    child: Column(
-      children: [
-        Icon(icon, size: 52, color: Theme.of(context).colorScheme.primary),
-        const SizedBox(height: 12),
-        Text(title, style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 8),
-        Text(message, textAlign: TextAlign.center),
-        const SizedBox(height: 18),
-        OutlinedButton(
-          onPressed: onRetry,
-          child: const Text('TENTAR NOVAMENTE'),
-        ),
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    DataCell number(String text) => DataCell(
+      Align(
+        alignment: Alignment.centerRight,
+        child: Text(text, style: tabularFigures),
+      ),
+    );
+    return AppTable(
+      columns: const [
+        DataColumn(label: Text('Terminal')),
+        DataColumn(label: Text('Status')),
+        DataColumn(label: Text('CPU'), numeric: true),
+        DataColumn(label: Text('RAM'), numeric: true),
+        DataColumn(label: Text('Temperatura'), numeric: true),
+        DataColumn(label: Text('Wi-Fi')),
+        DataColumn(label: Text('Último sinal')),
+        DataColumn(label: SizedBox.shrink()),
       ],
-    ),
-  );
+      rows: [
+        for (final terminal in terminals)
+          DataRow(
+            onSelectChanged: (_) => onOpen(terminal),
+            cells: [
+              DataCell(
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      terminal.terminalNome,
+                      style: theme.textTheme.titleSmall,
+                    ),
+                    Text(
+                      [
+                        terminal.condominioNome,
+                        ..._reasons(terminal),
+                      ].join(' · '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                    ),
+                  ],
+                ),
+              ),
+              DataCell(
+                AppStatusBadge(
+                  label: terminal.status.label,
+                  tone: telemetryStatusTone(terminal.status),
+                ),
+              ),
+              number(_metric(terminal.system?.cpuUsagePercent)),
+              number(_metric(terminal.system?.memoryUsagePercent)),
+              number(
+                _metric(terminal.system?.cpuTemperatureCelsius, suffix: '°C'),
+              ),
+              DataCell(
+                Text(telemetryWifiLabel(terminal.network?.wifiSignalQuality)),
+              ),
+              DataCell(
+                Text(
+                  telemetryRelativeTime(terminal.lastHeartbeatAt),
+                  style: TextStyle(color: muted),
+                ),
+              ),
+              DataCell(
+                TextButton(
+                  onPressed: () => onOpen(terminal),
+                  child: const Text('Ver detalhes'),
+                ),
+              ),
+            ],
+          ),
+      ],
+    );
+  }
+}
+
+class _TerminalRow extends StatelessWidget {
+  const _TerminalRow({required this.terminal, required this.onTap});
+  final TerminalTelemetry terminal;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final system = terminal.system;
+    final reasons = _reasons(terminal);
+    return AppListRow(
+      title: terminal.terminalNome,
+      meta: [
+        terminal.condominioNome,
+        if (reasons.isNotEmpty)
+          reasons.join(' · ')
+        else
+          'CPU ${_metric(system?.cpuUsagePercent)} · '
+              '${_metric(system?.cpuTemperatureCelsius, suffix: '°C')} · '
+              'Wi-Fi ${telemetryWifiLabel(terminal.network?.wifiSignalQuality)}',
+      ].join('\n'),
+      trailing: AppStatusBadge(
+        label: terminal.status.label,
+        tone: telemetryStatusTone(terminal.status),
+      ),
+      onTap: onTap,
+    );
+  }
 }

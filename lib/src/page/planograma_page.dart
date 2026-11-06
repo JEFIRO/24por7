@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../core/widgets/app_content.dart';
+import '../../core/widgets/async_state.dart';
 import '../model/produto.dart';
 import '../model/estoque.dart';
 import '../model/estoque_repository.dart';
@@ -44,11 +46,11 @@ class _PlanogramaPageState extends State<PlanogramaPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('CANCELAR'),
+            child: const Text('Cancelar'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('CRIAR'),
+            child: const Text('Criar'),
           ),
         ],
       ),
@@ -76,23 +78,23 @@ class _PlanogramaPageState extends State<PlanogramaPage> {
     floatingActionButton: FloatingActionButton.extended(
       onPressed: create,
       icon: const Icon(Icons.add),
-      label: const Text('NOVO'),
+      label: const Text('Novo planograma'),
     ),
     body: FutureBuilder<List<Planograma>>(
       future: future,
       builder: (context, s) {
         if (!s.hasData) {
           return s.hasError
-              ? Center(child: Text(s.error.toString()))
-              : const Center(child: CircularProgressIndicator());
+              ? AppErrorState(message: s.error.toString(), onRetry: load)
+              : const AppLoadingState(label: 'Carregando planogramas…');
         }
         final items = s.data!;
         if (items.isEmpty) {
-          return const Center(
-            child: Text(
-              'Planograma é opcional.\nNenhum foi criado.',
-              textAlign: TextAlign.center,
-            ),
+          return const AppEmptyState(
+            icon: Icons.view_module_outlined,
+            title: 'Nenhum planograma criado',
+            message:
+                'O planograma é opcional e organiza a localização dos produtos no estoque central.',
           );
         }
         return ListView.builder(
@@ -100,27 +102,25 @@ class _PlanogramaPageState extends State<PlanogramaPage> {
           itemCount: items.length,
           itemBuilder: (context, i) {
             final p = items[i];
-            return Card(
-              child: ListTile(
-                leading: const CircleAvatar(child: Icon(Icons.view_module)),
-                title: Text(p.nome),
-                subtitle: Text(
-                  '${p.posicoes.length} posição(ões) • ${p.ativo ? 'Ativo' : 'Inativo'}',
-                ),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () async {
-                  await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => PlanogramaDetailPage(
-                        planograma: p,
-                        repository: repository,
-                      ),
+            return AppListRow(
+              leading: const AppIconWell(Icons.view_module_outlined),
+              title: p.nome,
+              meta:
+                  '${p.posicoes.length == 1 ? '1 posição' : '${p.posicoes.length} posições'} · ${p.ativo ? 'Ativo' : 'Inativo'}',
+              muted: !p.ativo,
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => PlanogramaDetailPage(
+                      planograma: p,
+                      repository: repository,
                     ),
-                  );
-                  load();
-                },
-              ),
+                  ),
+                );
+                load();
+              },
             );
           },
         );
@@ -174,11 +174,11 @@ class _PlanogramaDetailPageState extends State<PlanogramaDetailPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('CANCELAR'),
+            child: const Text('Cancelar'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('SALVAR'),
+            child: const Text('Salvar'),
           ),
         ],
       ),
@@ -225,11 +225,11 @@ class _PlanogramaDetailPageState extends State<PlanogramaDetailPage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('CANCELAR'),
+              child: const Text('Cancelar'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('ADICIONAR'),
+              child: const Text('Adicionar'),
             ),
           ],
         ),
@@ -259,7 +259,7 @@ class _PlanogramaDetailPageState extends State<PlanogramaDetailPage> {
     floatingActionButton: FloatingActionButton.extended(
       onPressed: addPosition,
       icon: const Icon(Icons.add_location_alt),
-      label: const Text('POSIÇÃO'),
+      label: const Text('Nova posição'),
     ),
     body: ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 88),
@@ -280,42 +280,43 @@ class _PlanogramaDetailPageState extends State<PlanogramaDetailPage> {
             ),
           ),
         ...planograma.posicoes.map(
-          (p) => Card(
-            child: ExpansionTile(
-              title: Text(
-                p.localizacao.isEmpty ? 'Posição ${p.ordem}' : p.localizacao,
-              ),
-              subtitle: Text(p.setor ?? 'Sem setor'),
-              children: [
-                ...p.produtos
-                    .where((e) => e.ativo)
-                    .map(
-                      (e) => ListTile(
-                        title: Text(e.nome),
-                        subtitle: Text(
-                          'Facings: ${e.facings}${e.capacidade == null ? '' : ' • Capacidade: ${e.capacidade!.friendly}'}',
-                        ),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.remove_circle_outline),
-                          onPressed: () async {
-                            try {
-                              final result = await widget.repository
-                                  .removerProduto(e.id);
-                              setState(() => planograma = result);
-                            } catch (error) {
-                              _message(error);
-                            }
-                          },
-                        ),
+          (p) => ExpansionTile(
+            title: Text(
+              p.localizacao.isEmpty ? 'Posição ${p.ordem}' : p.localizacao,
+            ),
+            subtitle: Text(p.setor ?? 'Sem setor'),
+            children: [
+              ...p.produtos
+                  .where((e) => e.ativo)
+                  .map(
+                    (e) => ListTile(
+                      title: Text(e.nome),
+                      subtitle: Text(
+                        'Facings: ${e.facings}${e.capacidade == null ? '' : ' • Capacidade: ${e.capacidade!.friendly}'}',
+                      ),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.remove_circle_outline),
+                        onPressed: () async {
+                          try {
+                            final result = await widget.repository
+                                .removerProduto(e.id);
+                            setState(() => planograma = result);
+                          } catch (error) {
+                            _message(error);
+                          }
+                        },
                       ),
                     ),
-                ListTile(
-                  leading: const Icon(Icons.add),
-                  title: const Text('Adicionar produto'),
-                  onTap: () => addProduct(p),
+                  ),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('Adicionar produto'),
+                  onPressed: () => addProduct(p),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ],

@@ -106,18 +106,12 @@ class _ListaProdutoState extends State<ListaProduto> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: const Text('Produtos'),
-      actions: [
-        IconButton(
-          tooltip: 'Atualizar',
-          onPressed: _loading ? null : _buscar,
-          icon: const Icon(Icons.refresh),
-        ),
-      ],
-    ),
     floatingActionButton: AppBreakpoints.isMobile(context)
-        ? FloatingActionButton(onPressed: _create, child: const Icon(Icons.add))
+        ? FloatingActionButton.extended(
+            onPressed: _create,
+            icon: const Icon(Icons.add),
+            label: const Text('Novo produto'),
+          )
         : null,
     body: _loading && _result == null
         ? const AppLoadingState(label: 'Carregando catálogo…')
@@ -135,42 +129,42 @@ class _ListaProdutoState extends State<ListaProduto> {
                       title: 'Catálogo de produtos',
                       subtitle:
                           '${_result?.totalElements ?? 0} produtos cadastrados na Empresa.',
+                      onRefresh: _buscar,
+                      refreshing: _loading,
                       actions: [
                         OutlinedButton.icon(
                           onPressed: _loading ? null : _import,
-                          icon: const Icon(Icons.upload_file),
+                          icon: const Icon(Icons.upload_file, size: 18),
                           label: const Text('Importar planilha'),
                         ),
                         if (!AppBreakpoints.isMobile(context))
                           FilledButton.icon(
                             onPressed: _create,
-                            icon: const Icon(Icons.add),
+                            icon: const Icon(Icons.add, size: 18),
                             label: const Text('Novo produto'),
                           ),
                       ],
                     ),
                     const SizedBox(height: AppSpacing.xl),
-                    TextField(
-                      controller: _search,
-                      onChanged: (_) => setState(() {}),
-                      decoration: const InputDecoration(
-                        labelText: 'Buscar nesta página',
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 520),
+                      child: AppSearchField(
+                        controller: _search,
                         hintText: 'Nome, SKU ou código de barras',
-                        prefixIcon: Icon(Icons.search),
+                        onChanged: (_) => setState(() {}),
                       ),
                     ),
                     const SizedBox(height: AppSpacing.lg),
                     if (_error != null)
                       Padding(
                         padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                        child: MaterialBanner(
-                          content: Text(_error!),
-                          actions: [
-                            TextButton(
-                              onPressed: _buscar,
-                              child: const Text('Tentar novamente'),
-                            ),
-                          ],
+                        child: AppBanner(
+                          tone: AppStatusTone.critical,
+                          message: _error!,
+                          action: TextButton(
+                            onPressed: _buscar,
+                            child: const Text('Tentar novamente'),
+                          ),
                         ),
                       ),
                     if ((_result?.items.isEmpty ?? true))
@@ -181,7 +175,7 @@ class _ListaProdutoState extends State<ListaProduto> {
                             'Cadastre manualmente ou importe a planilha oficial.',
                         action: FilledButton(
                           onPressed: _create,
-                          child: const Text('Criar produto'),
+                          child: const Text('Novo produto'),
                         ),
                       )
                     else if (_visible.isEmpty)
@@ -190,7 +184,7 @@ class _ListaProdutoState extends State<ListaProduto> {
                         title: 'Nenhum resultado nesta página',
                         message: 'Limpe a busca ou avance para outra página.',
                       )
-                    else if (AppBreakpoints.isDesktop(context))
+                    else if (!AppBreakpoints.isMobile(context))
                       _desktopTable()
                     else
                       _mobileList(),
@@ -206,96 +200,98 @@ class _ListaProdutoState extends State<ListaProduto> {
           ),
   );
 
+  AppStatusBadge _status(Produto product) => AppStatusBadge(
+    label: product.ativo ? 'Ativo' : 'Inativo',
+    tone: product.ativo ? AppStatusTone.success : AppStatusTone.neutral,
+  );
+
   Widget _mobileList() => Column(
     children: [
       for (final product in _visible)
-        Padding(
-          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-          child: Card(
-            child: ListTile(
-              contentPadding: const EdgeInsets.all(AppSpacing.lg),
-              onTap: () => _editar(product),
-              leading: CircleAvatar(
-                child: Icon(
-                  product.ativo
-                      ? Icons.inventory_2
-                      : Icons.inventory_2_outlined,
-                ),
+        AppListRow(
+          onTap: () => _editar(product),
+          muted: !product.ativo,
+          title: product.nome,
+          meta:
+              'SKU ${product.codigoInterno} · ${product.codigoBarrasPrincipal ?? 'Sem código principal'}',
+          trailing: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                product.preco.currency,
+                style: tabularFigures.copyWith(fontWeight: FontWeight.w600),
               ),
-              title: Text(product.nome),
-              subtitle: Text(
-                'SKU ${product.codigoInterno}\n${product.codigoBarrasPrincipal ?? "Sem código principal"}',
-              ),
-              trailing: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    product.preco.currency,
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  AppStatusBadge(
-                    label: product.ativo ? 'Ativo' : 'Inativo',
-                    tone: product.ativo
-                        ? AppStatusTone.success
-                        : AppStatusTone.neutral,
-                  ),
-                ],
-              ),
-            ),
+              const SizedBox(height: AppSpacing.xs),
+              _status(product),
+            ],
           ),
         ),
     ],
   );
 
-  Widget _desktopTable() => Card(
-    child: SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: DataTable(
-        columns: const [
-          DataColumn(label: Text('Produto')),
-          DataColumn(label: Text('SKU')),
-          DataColumn(label: Text('Código principal')),
-          DataColumn(label: Text('Categoria')),
-          DataColumn(label: Text('Preço'), numeric: true),
-          DataColumn(label: Text('Status')),
-          DataColumn(label: Text('')),
-        ],
-        rows: [
-          for (final product in _visible)
-            DataRow(
-              cells: [
-                DataCell(Text(product.nome), onTap: () => _editar(product)),
-                DataCell(Text(product.codigoInterno)),
-                DataCell(Text(product.codigoBarrasPrincipal ?? '—')),
-                DataCell(Text(product.categoria)),
-                DataCell(Text(product.preco.currency)),
-                DataCell(
-                  AppStatusBadge(
-                    label: product.ativo ? 'Ativo' : 'Inativo',
-                    tone: product.ativo
-                        ? AppStatusTone.success
-                        : AppStatusTone.neutral,
-                  ),
+  Widget _desktopTable() {
+    final theme = Theme.of(context);
+    return AppTable(
+      columns: const [
+        DataColumn(label: Text('Produto')),
+        DataColumn(label: Text('SKU')),
+        DataColumn(label: Text('Código principal')),
+        DataColumn(label: Text('Preço'), numeric: true),
+        DataColumn(label: Text('Status')),
+        DataColumn(label: SizedBox.shrink()),
+      ],
+      rows: [
+        for (final product in _visible)
+          DataRow(
+            onSelectChanged: (_) => _editar(product),
+            cells: [
+              DataCell(
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(product.nome, style: theme.textTheme.titleSmall),
+                    Text(
+                      product.categoria,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
                 ),
-                DataCell(
-                  IconButton(
-                    tooltip: 'Editar',
-                    onPressed: () => _editar(product),
-                    icon: const Icon(Icons.edit_outlined),
-                  ),
+              ),
+              DataCell(Text(product.codigoInterno, style: tabularFigures)),
+              DataCell(
+                Text(
+                  product.codigoBarrasPrincipal ?? '—',
+                  style: tabularFigures,
                 ),
-              ],
-            ),
-        ],
-      ),
-    ),
-  );
+              ),
+              DataCell(Text(product.preco.currency, style: tabularFigures)),
+              DataCell(_status(product)),
+              DataCell(
+                IconButton(
+                  tooltip: 'Editar ${product.nome}',
+                  onPressed: () => _editar(product),
+                  icon: const Icon(Icons.edit_outlined),
+                ),
+              ),
+            ],
+          ),
+      ],
+    );
+  }
 
   Widget _pagination() => Row(
     mainAxisAlignment: MainAxisAlignment.end,
     children: [
-      Text('Página ${_page + 1} de ${_result!.totalPages}'),
+      Text(
+        'Página ${_page + 1} de ${_result!.totalPages}',
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+      ),
       const SizedBox(width: AppSpacing.md),
       IconButton(
         tooltip: 'Página anterior',

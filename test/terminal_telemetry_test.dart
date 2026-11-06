@@ -49,7 +49,9 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1200, 900));
     final repository = _FakeRepository();
     await tester.pumpWidget(
-      MaterialApp(home: MonitoringDashboardPage(repository: repository)),
+      MaterialApp(
+        home: Scaffold(body: MonitoringDashboardPage(repository: repository)),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -79,7 +81,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('PROBLEMA DE ALIMENTAÇÃO'), findsOneWidget);
+    expect(find.text('Problema de alimentação'), findsOneWidget);
     expect(find.text('Subtensão detectada no Raspberry.'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('Diagnóstico bruto'),

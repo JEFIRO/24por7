@@ -30,6 +30,15 @@ class DecimalValue {
     return DecimalValue._(negative && !isZero ? '-$magnitude' : magnitude);
   }
 
+  /// Inverso de [scaledInteger]: o inteiro representa 6 casas decimais.
+  factory DecimalValue.fromScaled(BigInt scaled) {
+    final sinal = scaled.isNegative ? '-' : '';
+    final digits = scaled.abs().toString().padLeft(7, '0');
+    return DecimalValue.parse(
+      '$sinal${digits.substring(0, digits.length - 6)}.${digits.substring(digits.length - 6)}',
+    );
+  }
+
   String get persistence {
     return fixedScale(6);
   }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/widgets/app_content.dart';
 import '../../core/widgets/async_state.dart';
+import '../../core/widgets/status_badge.dart';
 import '../model/operational_repository.dart';
 import 'terminal_pairing.dart';
 
@@ -130,6 +131,10 @@ class _CondominioTerminalPageState extends State<CondominioTerminalPage> {
             child: const Text('Cancelar'),
           ),
           FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+              foregroundColor: Theme.of(context).colorScheme.onError,
+            ),
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Desativar'),
           ),
@@ -149,19 +154,18 @@ class _CondominioTerminalPageState extends State<CondominioTerminalPage> {
     }
   }
 
+  void _setFilter(String? id) {
+    setState(() => _filter = id);
+    _load();
+  }
+
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: const Text('Operação'),
-      actions: [
-        IconButton(
-          tooltip: 'Atualizar',
-          onPressed: _loading ? null : _load,
-          icon: const Icon(Icons.refresh),
-        ),
-      ],
-    ),
-    body: _loading
+  Widget build(BuildContext context) {
+    final mobile = AppBreakpoints.isMobile(context);
+    final visible = _filter == null
+        ? _condominios
+        : _condominios.where((item) => item.id == _filter).toList();
+    return _loading
         ? const AppLoadingState(label: 'Carregando unidades e Terminais…')
         : _error != null
         ? AppErrorState(message: _error!, onRetry: _load)
@@ -176,226 +180,301 @@ class _CondominioTerminalPageState extends State<CondominioTerminalPage> {
                     AppPageHeader(
                       title: 'Condomínios e Terminais',
                       subtitle:
-                          'Gerencie as unidades do tenant e acompanhe seus equipamentos.',
+                          'Unidades da empresa e os Terminais instalados em cada uma.',
                       actions: [
                         OutlinedButton.icon(
-                          onPressed: () => _editCondominio(),
-                          icon: const Icon(Icons.add_business),
-                          label: const Text('Novo condomínio'),
-                        ),
-                        FilledButton.icon(
                           onPressed: _condominios.isEmpty
                               ? null
                               : () => _editTerminal(),
-                          icon: const Icon(Icons.add_to_queue),
+                          icon: const Icon(Icons.add, size: 18),
                           label: const Text('Novo Terminal'),
+                        ),
+                        FilledButton.icon(
+                          onPressed: () => _editCondominio(),
+                          icon: const Icon(Icons.add, size: 18),
+                          label: const Text('Novo condomínio'),
                         ),
                       ],
                     ),
                     const SizedBox(height: AppSpacing.xl),
-                    LayoutBuilder(
-                      builder: (context, constraints) =>
-                          constraints.maxWidth >= 980
-                          ? Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                SizedBox(width: 360, child: _condominioPanel()),
-                                const SizedBox(width: AppSpacing.xl),
-                                Expanded(child: _terminalPanel()),
+                    if (_condominios.isEmpty)
+                      AppEmptyState(
+                        icon: Icons.apartment_outlined,
+                        title: 'Nenhum condomínio cadastrado',
+                        message:
+                            'Cadastre a primeira unidade para vincular Terminais e estoque.',
+                        action: FilledButton(
+                          onPressed: () => _editCondominio(),
+                          child: const Text('Cadastrar condomínio'),
+                        ),
+                      )
+                    else ...[
+                      Wrap(
+                        spacing: AppSpacing.md,
+                        runSpacing: AppSpacing.sm,
+                        crossAxisAlignment: WrapCrossAlignment.end,
+                        children: [
+                          SizedBox(
+                            width: mobile ? double.infinity : 320,
+                            child: DropdownButtonFormField<String?>(
+                              initialValue: _filter,
+                              isExpanded: true,
+                              decoration: const InputDecoration(
+                                labelText: 'Condomínio',
+                              ),
+                              items: [
+                                DropdownMenuItem(
+                                  value: null,
+                                  child: Text(
+                                    'Todos (${_condominios.length} unidades)',
+                                  ),
+                                ),
+                                for (final item in _condominios)
+                                  DropdownMenuItem(
+                                    value: item.id,
+                                    child: Text(item.nome),
+                                  ),
                               ],
-                            )
-                          : Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                _condominioPanel(),
-                                const SizedBox(height: AppSpacing.xl),
-                                _terminalPanel(),
-                              ],
+                              onChanged: _setFilter,
                             ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-  );
-
-  Widget _condominioPanel() => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text('Condomínios', style: Theme.of(context).textTheme.titleLarge),
-      const SizedBox(height: AppSpacing.md),
-      if (_condominios.isEmpty)
-        AppEmptyState(
-          icon: Icons.apartment_outlined,
-          title: 'Nenhum condomínio cadastrado',
-          message:
-              'Cadastre a primeira unidade para vincular Terminais e estoque.',
-          action: FilledButton(
-            onPressed: () => _editCondominio(),
-            child: const Text('Cadastrar condomínio'),
-          ),
-        )
-      else ...[
-        Card(
-          child: ListTile(
-            selected: _filter == null,
-            leading: const Icon(Icons.domain),
-            title: const Text('Todos os condomínios'),
-            subtitle: Text('${_condominios.length} unidades'),
-            onTap: () {
-              setState(() => _filter = null);
-              _load();
-            },
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        ..._condominios.map(
-          (item) => Padding(
-            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-            child: Card(
-              child: ListTile(
-                selected: _filter == item.id,
-                leading: Icon(
-                  item.ativo ? Icons.apartment : Icons.domain_disabled,
-                ),
-                title: Text(item.nome),
-                subtitle: Text(
-                  [
-                    item.cnpj?.isNotEmpty == true ? item.cnpj! : 'Sem CNPJ',
-                    if (item.endereco?.cidade != null)
-                      '${item.endereco!.cidade}/${item.endereco!.estado ?? ''}',
-                  ].join(' • '),
-                ),
-                trailing: PopupMenuButton<String>(
-                  onSelected: (action) async {
-                    if (action == 'edit') await _editCondominio(item);
-                    if (action == 'terminals') {
-                      setState(() => _filter = item.id);
-                      await _load();
-                    }
-                    if (action == 'disable') {
-                      await _disableCondominio(item);
-                    }
-                  },
-                  itemBuilder: (_) => [
-                    const PopupMenuItem(
-                      value: 'terminals',
-                      child: Text('Ver Terminais'),
-                    ),
-                    const PopupMenuItem(value: 'edit', child: Text('Editar')),
-                    if (item.ativo)
-                      const PopupMenuItem(
-                        value: 'disable',
-                        child: Text('Desativar'),
+                          ),
+                          if (_filter != null)
+                            TextButton(
+                              onPressed: () => _setFilter(null),
+                              child: const Text('Limpar filtro'),
+                            ),
+                        ],
                       ),
+                      for (final condominio in visible) ...[
+                        const SizedBox(height: AppSpacing.xxl),
+                        _condominioSection(condominio, mobile),
+                      ],
+                    ],
                   ],
                 ),
-                onTap: () {
-                  setState(() => _filter = item.id);
-                  _load();
-                },
               ),
             ),
-          ),
+          );
+  }
+
+  Widget _condominioSection(CondominioAdmin item, bool mobile) {
+    final theme = Theme.of(context);
+    final terminais = _terminais
+        .where((terminal) => terminal.condominioId == item.id)
+        .toList();
+    final endereco = item.endereco;
+    final meta = [
+      item.cnpj?.isNotEmpty == true ? 'CNPJ ${item.cnpj}' : 'Sem CNPJ',
+      if (endereco?.cidade?.isNotEmpty == true)
+        [
+          if (endereco!.rua?.isNotEmpty == true)
+            '${endereco.rua}${endereco.numero?.isNotEmpty == true ? ', ${endereco.numero}' : ''}',
+          '${endereco.cidade}${endereco.estado?.isNotEmpty == true ? '/${endereco.estado}' : ''}',
+        ].join(' – '),
+    ].join(' · ');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AppIconWell(
+              item.ativo ? Icons.apartment_outlined : Icons.domain_disabled,
+              color: item.ativo ? null : theme.colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    spacing: AppSpacing.sm,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text(item.nome, style: theme.textTheme.titleLarge),
+                      if (!item.ativo) const AppStatusBadge(label: 'Inativo'),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    meta,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (!mobile)
+              TextButton(
+                onPressed: () => Navigator.pushNamed(context, '/monitoramento'),
+                child: const Text('Ver monitoramento'),
+              ),
+            IconButton(
+              tooltip: 'Editar condomínio',
+              onPressed: () => _editCondominio(item),
+              icon: const Icon(Icons.edit_outlined),
+            ),
+            PopupMenuButton<String>(
+              tooltip: 'Mais ações',
+              onSelected: (action) async {
+                if (action == 'terminal') await _editTerminal();
+                if (action == 'disable') await _disableCondominio(item);
+              },
+              itemBuilder: (_) => [
+                if (item.ativo)
+                  const PopupMenuItem(
+                    value: 'terminal',
+                    child: Text('Novo Terminal'),
+                  ),
+                if (item.ativo)
+                  const PopupMenuItem(
+                    value: 'disable',
+                    child: Text('Desativar'),
+                  ),
+              ],
+            ),
+          ],
         ),
+        const SizedBox(height: AppSpacing.md),
+        if (terminais.isEmpty)
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+            decoration: BoxDecoration(
+              border: Border.symmetric(
+                horizontal: BorderSide(color: theme.colorScheme.outlineVariant),
+              ),
+            ),
+            child: Text(
+              'Este condomínio ainda não possui Terminal.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          )
+        else if (mobile)
+          for (final terminal in terminais)
+            AppListRow(
+              title: terminal.nome,
+              meta: [
+                if (terminal.serialNumber?.isNotEmpty == true)
+                  'Série ${terminal.serialNumber}',
+                terminal.mercadoPagoTerminalId == null
+                    ? 'Point não vinculada'
+                    : 'Point configurada',
+              ].join(' · '),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _terminalStatus(terminal),
+                  IconButton(
+                    tooltip: 'Parear Terminal',
+                    onPressed: () => _pairTerminal(terminal),
+                    icon: const Icon(Icons.qr_code_scanner),
+                  ),
+                ],
+              ),
+              onTap: () =>
+                  Navigator.pushNamed(context, '/terminais/${terminal.id}'),
+            )
+        else
+          AppTable(
+            columns: const [
+              DataColumn(label: Text('Nome')),
+              DataColumn(label: Text('Número de série')),
+              DataColumn(label: Text('IP local')),
+              DataColumn(label: Text('Point')),
+              DataColumn(label: Text('Status')),
+              DataColumn(label: SizedBox.shrink()),
+            ],
+            rows: [
+              for (final terminal in terminais)
+                DataRow(
+                  onSelectChanged: (_) =>
+                      Navigator.pushNamed(context, '/terminais/${terminal.id}'),
+                  cells: [
+                    DataCell(
+                      Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            terminal.nome,
+                            style: theme.textTheme.titleSmall,
+                          ),
+                          if (terminal.versaoSoftware != null)
+                            Text(
+                              'Versão ${terminal.versaoSoftware}',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    DataCell(_orDash(terminal.serialNumber)),
+                    DataCell(_orDash(terminal.ipAddress)),
+                    DataCell(
+                      Text(
+                        terminal.mercadoPagoTerminalId == null
+                            ? 'Não vinculada'
+                            : 'Configurada',
+                        style: terminal.mercadoPagoTerminalId == null
+                            ? TextStyle(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              )
+                            : null,
+                      ),
+                    ),
+                    DataCell(_terminalStatus(terminal)),
+                    DataCell(
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            tooltip: 'Parear Terminal',
+                            onPressed: () => _pairTerminal(terminal),
+                            icon: const Icon(Icons.qr_code_scanner),
+                          ),
+                          IconButton(
+                            tooltip: 'Editar Terminal',
+                            onPressed: () => _editTerminal(terminal),
+                            icon: const Icon(Icons.edit_outlined),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+            ],
+          ),
       ],
-    ],
+    );
+  }
+
+  Widget _orDash(String? value) => Text(
+    value?.isNotEmpty == true ? value! : '—',
+    style: value?.isNotEmpty == true
+        ? null
+        : TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
   );
 
-  Widget _terminalPanel() => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Row(
-        children: [
-          Expanded(
-            child: Text(
-              'Terminais',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-          ),
-          if (_filter != null)
-            TextButton(
-              onPressed: () {
-                setState(() => _filter = null);
-                _load();
-              },
-              child: const Text('Limpar filtro'),
-            ),
-        ],
-      ),
-      const SizedBox(height: AppSpacing.md),
-      if (_terminais.isEmpty)
-        AppEmptyState(
-          icon: Icons.desktop_windows_outlined,
-          title: 'Nenhum Terminal encontrado',
-          message: _filter == null
-              ? 'Cadastre o primeiro Terminal da operação.'
-              : 'Este condomínio ainda não possui Terminal.',
-          action: _condominios.isEmpty
-              ? null
-              : FilledButton(
-                  onPressed: () => _editTerminal(),
-                  child: const Text('Cadastrar Terminal'),
-                ),
-        )
-      else
-        ..._terminais.map(
-          (item) => Padding(
-            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-            child: Card(
-              child: ListTile(
-                contentPadding: const EdgeInsets.all(AppSpacing.lg),
-                leading: CircleAvatar(
-                  child: Icon(
-                    item.status == 'ONLINE'
-                        ? Icons.desktop_windows
-                        : Icons.desktop_access_disabled,
-                  ),
-                ),
-                title: Text(item.nome),
-                subtitle: Text(
-                  [
-                    if (item.codigo.isNotEmpty) 'Código ${item.codigo}',
-                    item.mercadoPagoTerminalId == null
-                        ? 'Point não vinculada'
-                        : 'Point configurada',
-                    if (item.versaoSoftware != null)
-                      'Versão ${item.versaoSoftware}',
-                    item.status,
-                  ].join(' • '),
-                ),
-                trailing: PopupMenuButton<String>(
-                  onSelected: (action) {
-                    if (action == 'edit') _editTerminal(item);
-                    if (action == 'pair') _pairTerminal(item);
-                    if (action == 'detail') {
-                      Navigator.pushNamed(context, '/terminais/${item.id}');
-                    }
-                  },
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(
-                      value: 'detail',
-                      child: Text('Ver monitoramento'),
-                    ),
-                    PopupMenuItem(
-                      value: 'pair',
-                      child: Text('Parear Terminal'),
-                    ),
-                    PopupMenuItem(
-                      value: 'edit',
-                      child: Text('Editar Terminal'),
-                    ),
-                  ],
-                ),
-                onTap: () =>
-                    Navigator.pushNamed(context, '/terminais/${item.id}'),
-              ),
-            ),
-          ),
-        ),
-    ],
-  );
+  Widget _terminalStatus(TerminalAdmin terminal) => switch (terminal.status) {
+    'ONLINE' => const AppStatusBadge(
+      label: 'Online',
+      tone: AppStatusTone.success,
+    ),
+    'OFFLINE' => const AppStatusBadge(label: 'Offline'),
+    'MANUTENCAO' => const AppStatusBadge(
+      label: 'Manutenção',
+      tone: AppStatusTone.warning,
+    ),
+    final other => AppStatusBadge(
+      label: other.isEmpty
+          ? 'Sem status'
+          : '${other[0]}${other.substring(1).toLowerCase()}',
+    ),
+  };
 }
 
 class _CondominioDialog extends StatefulWidget {

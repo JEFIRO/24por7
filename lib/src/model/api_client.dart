@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
@@ -31,25 +33,106 @@ class ApiException implements Exception {
   String toString() => message;
 }
 
+/// Persiste a sessão (token + usuário) entre execuções do app.
+abstract class SessionStorage {
+  Future<String?> read();
+  Future<void> write(String value);
+  Future<void> clear();
+}
+
+class SecureSessionStorage implements SessionStorage {
+  const SecureSessionStorage();
+  static const _key = 'admin_session';
+  static const _storage = FlutterSecureStorage();
+
+  @override
+  Future<String?> read() => _storage.read(key: _key);
+  @override
+  Future<void> write(String value) => _storage.write(key: _key, value: value);
+  @override
+  Future<void> clear() => _storage.delete(key: _key);
+}
+
 class ApiClient {
-  ApiClient({http.Client? httpClient, String? baseUrl})
-    : _http = httpClient ?? http.Client(),
-      baseUrl =
-          (baseUrl ??
-                  const String.fromEnvironment(
-                    'API_URL',
-                    defaultValue: 'http://localhost:8080',
-                  ))
-              .replaceFirst(RegExp(r'/$'), '');
+  ApiClient({
+    http.Client? httpClient,
+    String? baseUrl,
+    SessionStorage? sessionStorage,
+  }) : _http = httpClient ?? http.Client(),
+       _sessionStorage = sessionStorage ?? const SecureSessionStorage(),
+      baseUrl = (baseUrl ?? _configuredBaseUrl()).replaceFirst(
+        RegExp(r'/$'),
+        '',
+      );
+
+  /// Ordem: --dart-define=API_URL, depois API_URL do .env, depois localhost.
+  static String _configuredBaseUrl() {
+    const defined = String.fromEnvironment('API_URL');
+    if (defined.isNotEmpty) return defined;
+    final fromEnv = dotenv.isInitialized ? dotenv.maybeGet('API_URL') : null;
+    if (fromEnv != null && fromEnv.trim().isNotEmpty) return fromEnv.trim();
+    return 'http://localhost:8080';
+  }
 
   static final ApiClient instance = ApiClient();
   final http.Client _http;
+  final SessionStorage _sessionStorage;
   final String baseUrl;
   String? token = const String.fromEnvironment('API_TOKEN');
   Map<String, dynamic>? authenticatedUser;
   void Function()? onUnauthorized;
 
-  bool get isAuthenticated => token?.isNotEmpty == true;
+  bool get isAuthenticated {
+    final current = token;
+    if (current == null || current.isEmpty) return false;
+    final expiresAt = tokenExpiration(current);
+    return expiresAt == null || DateTime.now().isBefore(expiresAt);
+  }
+
+  /// Lê o claim `exp` do JWT. Retorna null se o token não for um JWT válido.
+  static DateTime? tokenExpiration(String jwt) {
+    final parts = jwt.split('.');
+    if (parts.length != 3) return null;
+    try {
+      final payload = jsonDecode(
+        utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
+      );
+      final exp = payload is Map ? payload['exp'] : null;
+      if (exp is! num) return null;
+      return DateTime.fromMillisecondsSinceEpoch(exp.toInt() * 1000);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Restaura a sessão salva, descartando-a se o token já expirou.
+  Future<void> restoreSession() async {
+    if (isAuthenticated) return;
+    try {
+      final raw = await _sessionStorage.read();
+      if (raw == null || raw.isEmpty) return;
+      final data = jsonDecode(raw);
+      final saved = data is Map ? data['token']?.toString() : null;
+      if (saved == null || saved.isEmpty) return;
+      token = saved;
+      authenticatedUser = data['user'] is Map
+          ? Map<String, dynamic>.from(data['user'] as Map)
+          : null;
+      if (!isAuthenticated) clearSession();
+    } catch (_) {
+      clearSession();
+    }
+  }
+
+  Future<void> _persistSession() async {
+    try {
+      await _sessionStorage.write(
+        jsonEncode({'token': token, 'user': authenticatedUser}),
+      );
+    } catch (_) {
+      // Sem armazenamento disponível: a sessão vale só até fechar o app.
+    }
+  }
 
   Map<String, String> get _headers => {
     'Content-Type': 'application/json; charset=utf-8',
@@ -71,11 +154,13 @@ class ApiClient {
     authenticatedUser = data['user'] is Map
         ? Map<String, dynamic>.from(data['user'] as Map)
         : null;
+    await _persistSession();
   }
 
   void clearSession() {
     token = null;
     authenticatedUser = null;
+    _sessionStorage.clear().catchError((_) {});
   }
 
   Future<Uri> authenticatedRedirect(String path) async {

@@ -1,5 +1,6 @@
 import 'admin_dashboard.dart';
 import 'admin_history.dart';
+import 'admin_sale_detail.dart';
 import 'api_client.dart';
 
 class AdminRepository {
@@ -68,4 +69,39 @@ class AdminRepository {
     ),
     AdminAlert.fromJson,
   );
+
+  Future<AdminSaleDetail> saleDetail(String orderId) async =>
+      AdminSaleDetail.fromJson(
+        Map<String, dynamic>.from(
+          await client.get('/admin/sales/${Uri.encodeComponent(orderId)}')
+              as Map,
+        ),
+      );
+
+  /// Retorna `true` quando o comprovante já tinha sido enviado a esse destino.
+  Future<bool> sendReceipt(
+    String orderId, {
+    required ReceiptChannel channel,
+    required String destination,
+  }) async {
+    final response = await client.post(
+      '/admin/sales/${Uri.encodeComponent(orderId)}/comprovante',
+      {
+        'tipoEnvio': channel == ReceiptChannel.whatsapp ? 'WHATSAPP' : 'EMAIL',
+        'destinatario': destination,
+      },
+    );
+    return response is Map && response['duplicado'] == true;
+  }
+
+  Future<AdminRefundResult> refund(String orderId) async =>
+      AdminRefundResult.fromJson(
+        Map<String, dynamic>.from(
+          await client.post(
+                '/admin/orders/${Uri.encodeComponent(orderId)}/refund',
+                const <String, dynamic>{},
+              )
+              as Map,
+        ),
+      );
 }
