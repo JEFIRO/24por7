@@ -104,6 +104,13 @@ const appDestinations = <AppDestination>[
     Icons.phone_iphone,
     'Configurações',
   ),
+  AppDestination(
+    AppRoutes.configuracoes,
+    'Empresa e perfil',
+    Icons.settings_outlined,
+    Icons.settings,
+    'Configurações',
+  ),
 ];
 
 /// Rotas que exigem papel ADMIN ou GERENTE.
@@ -274,7 +281,7 @@ class AdminTopBar extends StatelessWidget implements PreferredSizeWidget {
           const SizedBox(width: AppSpacing.sm),
           Flexible(
             child: Text(
-              '24/7 Admin',
+              branding.displayName,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.titleMedium,
@@ -314,29 +321,6 @@ class AdminTopBar extends StatelessWidget implements PreferredSizeWidget {
               onPressed: controller.openView,
             ),
           ),
-        if (!compact) ...[
-          // Empresa da sessão. A API ainda não tem troca de empresa.
-          Container(
-            height: 40,
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-            decoration: BoxDecoration(
-              border: Border.all(color: scheme.outlineVariant),
-              borderRadius: BorderRadius.circular(AppRadius.md),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.store_outlined,
-                  size: 20,
-                  color: scheme.onSurfaceVariant,
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Text(branding.displayName, style: theme.textTheme.labelLarge),
-              ],
-            ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-        ],
         IconButton(
           tooltip: alertCount > 0
               ? '$alertCount alertas ativos'
@@ -349,7 +333,7 @@ class AdminTopBar extends StatelessWidget implements PreferredSizeWidget {
           ),
         ),
         const SizedBox(width: AppSpacing.xs),
-        _UserMenu(onLogout: onLogout),
+        _UserMenu(onLogout: onLogout, onNavigate: onNavigate),
         const SizedBox(width: AppSpacing.md),
       ],
     );
@@ -361,7 +345,40 @@ class _BrandMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = BrandingScope.of(context).primaryColor;
+    final branding = BrandingScope.of(context);
+    final logo = branding.compactLogoUrl ?? branding.logoUrl;
+    if (logo != null && logo.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        child: Image.network(
+          logo,
+          height: 32,
+          width: 32,
+          fit: BoxFit.contain,
+          errorBuilder: (_, _, _) =>
+              _fallback(branding.primaryColor, branding.displayName),
+        ),
+      );
+    }
+    return _fallback(branding.primaryColor, branding.displayName);
+  }
+
+  /// Iniciais da Empresa (até 2 letras) quando não há logo.
+  static String _initials(String name) {
+    final words = name
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((w) => w.isNotEmpty)
+        .toList();
+    if (words.isEmpty) return '24/7';
+    if (words.length == 1) {
+      final w = words.first;
+      return (w.length > 2 ? w.substring(0, 2) : w).toUpperCase();
+    }
+    return '${words[0][0]}${words[1][0]}'.toUpperCase();
+  }
+
+  Widget _fallback(Color color, String name) {
     final foreground = color == AppColors.brand
         ? AppColors.onBrand
         : ThemeData.estimateBrightnessForColor(color) == Brightness.dark
@@ -377,7 +394,7 @@ class _BrandMark extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppRadius.sm),
       ),
       child: Text(
-        '24/7',
+        _initials(name),
         style: TextStyle(
           color: foreground,
           fontWeight: FontWeight.w800,
@@ -389,8 +406,9 @@ class _BrandMark extends StatelessWidget {
 }
 
 class _UserMenu extends StatelessWidget {
-  const _UserMenu({required this.onLogout});
+  const _UserMenu({required this.onLogout, required this.onNavigate});
   final VoidCallback onLogout;
+  final ValueChanged<String> onNavigate;
 
   @override
   Widget build(BuildContext context) {
@@ -430,6 +448,11 @@ class _UserMenu extends StatelessWidget {
             ),
           ),
         if (name.isNotEmpty) const Divider(),
+        MenuItemButton(
+          leadingIcon: const Icon(Icons.manage_accounts_outlined),
+          onPressed: () => onNavigate(AppRoutes.configuracoes),
+          child: const Text('Empresa e perfil'),
+        ),
         MenuItemButton(
           leadingIcon: Icon(Icons.logout, color: scheme.error),
           onPressed: onLogout,

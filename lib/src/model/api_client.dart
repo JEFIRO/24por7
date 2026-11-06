@@ -60,10 +60,10 @@ class ApiClient {
     SessionStorage? sessionStorage,
   }) : _http = httpClient ?? http.Client(),
        _sessionStorage = sessionStorage ?? const SecureSessionStorage(),
-      baseUrl = (baseUrl ?? _configuredBaseUrl()).replaceFirst(
-        RegExp(r'/$'),
-        '',
-      );
+       baseUrl = (baseUrl ?? _configuredBaseUrl()).replaceFirst(
+         RegExp(r'/$'),
+         '',
+       );
 
   /// Ordem: --dart-define=API_URL, depois API_URL do .env, depois localhost.
   static String _configuredBaseUrl() {
@@ -122,6 +122,12 @@ class ApiClient {
     } catch (_) {
       clearSession();
     }
+  }
+
+  /// Atualiza os dados do usuário logado (ex.: após editar o perfil).
+  Future<void> updateAuthenticatedUser(Map<String, dynamic> user) async {
+    authenticatedUser = user;
+    await _persistSession();
   }
 
   Future<void> _persistSession() async {

@@ -7,7 +7,9 @@ import '../../core/widgets/app_shell.dart';
 import '../model/admin_repository.dart';
 import '../model/api_client.dart';
 import '../model/app_cliente_config.dart';
+import '../model/empresa_branding.dart';
 import 'app_cliente_config_page.dart';
+import 'configuracoes_page.dart';
 import 'condominio_terminal_page.dart';
 import 'admin_history_page.dart';
 import 'dashboard_page.dart';
@@ -79,12 +81,14 @@ class _HomePageState extends State<HomePage> {
     AppRoutes.mercadoPago => const MercadoPagoPage(),
     AppRoutes.appCliente when canManageAppCliente() =>
       const AppClienteConfigPage(),
+    AppRoutes.configuracoes => const ConfiguracoesPage(),
     AppRoutes.more => MorePage(onNavigate: _navigate),
     _ => DashboardPage(onNavigate: _navigate, repository: widget.repository),
   };
 
   void _logout() {
     ApiClient.instance.clearSession();
+    resetBranding();
     Navigator.pushNamedAndRemoveUntil(context, AppRoutes.login, (_) => false);
   }
 
@@ -129,6 +133,7 @@ class MorePage extends StatelessWidget {
               leading: const Icon(Icons.logout),
               onTap: () {
                 ApiClient.instance.clearSession();
+                resetBranding();
                 Navigator.pushNamedAndRemoveUntil(
                   context,
                   AppRoutes.login,

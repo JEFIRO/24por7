@@ -4,6 +4,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/theme/branding_config.dart';
 import '../model/api_client.dart';
+import '../model/empresa_branding.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key, this.intendedRoute = '/dashboard'});
@@ -37,6 +38,7 @@ class _LoginPageState extends State<LoginPage> {
         _cpf.text.replaceAll(RegExp(r'\D'), ''),
         _senha.text,
       );
+      await loadBranding();
       if (mounted) {
         Navigator.of(context).pushReplacementNamed(widget.intendedRoute);
       }

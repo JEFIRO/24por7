@@ -2,6 +2,7 @@ import 'package:app_24por7/core/navigation/app_routes.dart';
 import 'package:app_24por7/core/theme/app_theme.dart';
 import 'package:app_24por7/core/theme/branding_config.dart';
 import 'package:app_24por7/src/model/api_client.dart';
+import 'package:app_24por7/src/model/empresa_branding.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -14,7 +15,10 @@ Future<void> main() async {
   tz.initializeTimeZones();
   await initializeDateFormatting('pt_BR');
   await ApiClient.instance.restoreSession();
+  // Não bloqueia a abertura: o tema atualiza quando o branding chegar.
+  loadBranding();
   ApiClient.instance.onUnauthorized = () {
+    resetBranding();
     appNavigatorKey.currentState?.pushNamedAndRemoveUntil(
       AppRoutes.login,
       (_) => false,
@@ -27,9 +31,9 @@ class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    const branding = BrandingConfig.fallback;
-    return BrandingScope(
+  Widget build(BuildContext context) => ValueListenableBuilder<BrandingConfig>(
+    valueListenable: brandingNotifier,
+    builder: (context, branding, _) => BrandingScope(
       branding: branding,
       child: MaterialApp(
         navigatorKey: appNavigatorKey,
@@ -41,6 +45,6 @@ class MyApp extends StatelessWidget {
         localizationsDelegates: GlobalMaterialLocalizations.delegates,
         onGenerateRoute: AppRoutes.onGenerateRoute,
       ),
-    );
-  }
+    ),
+  );
 }

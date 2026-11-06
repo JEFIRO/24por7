@@ -25,6 +25,7 @@ abstract final class AppRoutes {
   static const vendas = '/vendas';
   static const pagamentos = '/pagamentos';
   static const alertas = '/alertas';
+  static const configuracoes = '/configuracoes';
   static const more = '/mais';
 
   static const shellRoutes = <String>{
@@ -38,6 +39,7 @@ abstract final class AppRoutes {
     estoque,
     mercadoPago,
     appCliente,
+    configuracoes,
     vendas,
     pagamentos,
     alertas,
