@@ -60,7 +60,8 @@ class AdminSale {
   final String terminalNome;
   factory AdminSale.fromJson(Map<String, dynamic> json) => AdminSale(
     id: json['id']?.toString() ?? '',
-    status: json['status']?.toString() ?? 'UNKNOWN',
+    // O backend serializa OrderStatus pelo valor ("processed").
+    status: json['status']?.toString().toUpperCase() ?? 'UNKNOWN',
     total: DecimalValue.fromJson(json['total']),
     criadaEm: DateTime.tryParse(json['criadaEm']?.toString() ?? ''),
     pagaEm: DateTime.tryParse(json['pagaEm']?.toString() ?? ''),

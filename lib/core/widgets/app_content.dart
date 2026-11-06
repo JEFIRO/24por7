@@ -210,6 +210,7 @@ class AppListRow extends StatelessWidget {
     this.dense = false,
     this.showDivider = true,
     this.muted = false,
+    this.metaMaxLines = 2,
     super.key,
   });
 
@@ -221,6 +222,7 @@ class AppListRow extends StatelessWidget {
   final bool dense;
   final bool showDivider;
   final bool muted;
+  final int metaMaxLines;
 
   @override
   Widget build(BuildContext context) {
@@ -267,7 +269,7 @@ class AppListRow extends StatelessWidget {
                       padding: const EdgeInsets.only(top: 2),
                       child: Text(
                         meta!,
-                        maxLines: 2,
+                        maxLines: metaMaxLines,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: scheme.onSurfaceVariant,

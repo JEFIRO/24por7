@@ -31,8 +31,9 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.textContaining('Residencial Sol'), findsWidgets);
-      expect(find.textContaining('Totem 1'), findsWidgets);
+      expect(find.textContaining('SENAI Feira de Santana'), findsWidgets);
+      expect(find.text('Aprovada'), findsWidgets);
+      expect(find.text('processed'), findsNothing);
       await tester.tap(find.textContaining('#ABCDEF12').first);
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
@@ -54,12 +55,12 @@ class _Fake extends AdminRepository {
     'content': [
       {
         'id': 'abcdef12-3456-7890-abcd-ef1234567890',
-        'status': 'PROCESSED',
+        'status': 'processed',
         'total': '7.50',
         'criadaEm': '2026-11-06T17:30:00Z',
         'pagaEm': '2026-11-06T17:31:00Z',
-        'condominioNome': 'Residencial Sol',
-        'terminalNome': 'Totem 1',
+        'condominioNome': 'SENAI Feira de Santana Unidade Centro',
+        'terminalNome': 'T02',
       },
     ],
     'number': 0,

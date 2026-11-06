@@ -395,6 +395,7 @@ class _AdminHistoryPageState<T> extends State<_AdminHistoryPage<T>> {
                           return AppListRow(
                             title: spec.title,
                             meta: spec.meta,
+                            metaMaxLines: 4,
                             leading: widget.leading?.call(item),
                             trailing: spec.trailing,
                             muted: widget.muted?.call(item) ?? false,
