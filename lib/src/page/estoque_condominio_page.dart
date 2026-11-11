@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../core/widgets/app_refresh.dart';
+import '../../core/formatters/produto_labels.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/widgets/app_content.dart';
 import '../../core/widgets/async_state.dart';
 import '../../core/widgets/status_badge.dart';
+import '../model/decimal_value.dart';
 import '../model/estoque_repository.dart';
 import '../model/produto.dart';
 import 'estoque_produto_page.dart';
@@ -82,9 +84,7 @@ class _State extends State<EstoqueCondominioPage> {
 
   String _categoria(Map<String, dynamic> e) {
     final raw = e['categoria']?.toString() ?? _produto(e)?.categoria;
-    if (raw == null || raw.isEmpty) return '—';
-    final text = raw.replaceAll('_', ' ').toLowerCase();
-    return '${text[0].toUpperCase()}${text.substring(1)}';
+    return raw == null || raw.isEmpty ? '—' : ProdutoLabels.categoria(raw);
   }
 
   String _saldo(Map<String, dynamic> e) {
@@ -94,6 +94,16 @@ class _State extends State<EstoqueCondominioPage> {
         ? _qty(e['quantidade'])
         : '${_qty(e['quantidade'])} $unidade';
   }
+
+  /// Texto do aviso de estoque baixo, ou null quando o saldo está em dia.
+  String? _baixo(Map<String, dynamic> e) {
+    if (e['ativo'] == false || e['abaixoDoMinimo'] != true) return null;
+    return 'Estoque baixo (mín. ${_qtyCurta(e['estoqueMinimo'])})';
+  }
+
+  static String _qtyCurta(Object? value) => value == null
+      ? '—'
+      : DecimalValue.fromJson(value).friendly.replaceAll('.', ',');
 
   Future<void> _abrir(Map<String, dynamic> e) async {
     await Navigator.push(
@@ -186,7 +196,10 @@ class _State extends State<EstoqueCondominioPage> {
                   for (final e in visible)
                     AppListRow(
                       title: e['produto']?.toString() ?? 'Produto',
-                      meta: _sku(e) == null ? null : 'SKU ${_sku(e)}',
+                      meta: [
+                        if (_sku(e) != null) 'SKU ${_sku(e)}',
+                        ?_baixo(e),
+                      ].join('\n').nullIfEmpty,
                       muted: e['ativo'] == false,
                       trailing: Text(
                         _saldo(e),
@@ -239,6 +252,11 @@ class _State extends State<EstoqueCondominioPage> {
                             DataCell(
                               e['ativo'] == false
                                   ? const AppStatusBadge(label: 'Inativo')
+                                  : _baixo(e) != null
+                                  ? AppStatusBadge(
+                                      label: _baixo(e)!,
+                                      tone: AppStatusTone.warning,
+                                    )
                                   : const AppStatusBadge(
                                       label: 'Ativo',
                                       tone: AppStatusTone.success,
@@ -255,4 +273,8 @@ class _State extends State<EstoqueCondominioPage> {
       ),
     );
   }
+}
+
+extension on String {
+  String? get nullIfEmpty => isEmpty ? null : this;
 }

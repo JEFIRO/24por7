@@ -101,6 +101,12 @@ class Produto {
   /// Disponível em todos os Condomínios, inclusive nos criados depois. Só
   /// leitura aqui: muda por [ProdutoRepository.definirDisponivelEmTodos].
   final bool disponivelTodosCondominios;
+
+  /// Abaixo deste saldo o estoque central está baixo; null = sem mínimo.
+  final DecimalValue? estoqueMinimoCentral;
+
+  /// O mesmo mínimo vale para o saldo de cada Condomínio; null = sem mínimo.
+  final DecimalValue? estoqueMinimoCondominio;
   final ProdutoFiscal? fiscal;
 
   const Produto({
@@ -117,6 +123,8 @@ class Produto {
     this.pesoTolerancia,
     this.ativo = true,
     this.disponivelTodosCondominios = false,
+    this.estoqueMinimoCentral,
+    this.estoqueMinimoCondominio,
     this.fiscal,
   });
 
@@ -162,11 +170,24 @@ class Produto {
           : DecimalValue.fromJson(json['pesoTolerancia']),
       ativo: json['ativo'] ?? json['status'] ?? true,
       disponivelTodosCondominios: json['disponivelTodosCondominios'] == true,
+      estoqueMinimoCentral: _minimo(json['estoqueMinimoCentral']),
+      estoqueMinimoCondominio: _minimo(json['estoqueMinimoCondominio']),
       fiscal: json['fiscal'] is Map
           ? ProdutoFiscal.fromJson(Map<String, dynamic>.from(json['fiscal']))
           : null,
     );
   }
+
+  static DecimalValue? _minimo(Object? raw) {
+    if (raw == null) return null;
+    final value = DecimalValue.fromJson(raw);
+    return value.isPositive ? value : null;
+  }
+
+  /// O saldo [quantidade] está abaixo de [minimo]? Sem mínimo, nunca está.
+  static bool abaixoDoMinimo(DecimalValue? quantidade, DecimalValue? minimo) =>
+      minimo != null &&
+      (quantidade?.scaledInteger ?? BigInt.zero) < minimo.scaledInteger;
 
   Map<String, dynamic> toRequestJson() => {
     // Campo legado mantido durante a transição dos consumidores antigos.
@@ -181,6 +202,10 @@ class Produto {
     'peso': peso?.fixedScale(3),
     'pesoTolerancia': pesoTolerancia?.fixedScale(3),
     'ativo': ativo,
+    // Zero limpa o mínimo no backend.
+    'estoqueMinimoCentral': estoqueMinimoCentral?.fixedScale(3) ?? '0.000',
+    'estoqueMinimoCondominio':
+        estoqueMinimoCondominio?.fixedScale(3) ?? '0.000',
     if (fiscal != null && !fiscal!.isEmpty) 'fiscal': fiscal!.toJson(),
   };
 }

@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/formatters/decimal_input_formatter.dart';
+import '../../core/formatters/produto_labels.dart';
 import '../../core/widgets/app_feedback.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/widgets/app_content.dart';
@@ -13,6 +14,7 @@ import '../model/produto.dart';
 import '../model/produto_repository.dart';
 import '../model/promocao.dart';
 import '../model/promocao_repository.dart';
+import 'estoque_produto_page.dart';
 import 'scanner_page.dart';
 
 class CadastraProduto extends StatefulWidget {
@@ -42,9 +44,12 @@ class _CadastraProdutoState extends State<CadastraProduto> {
   final _peso = TextEditingController();
   final _tolerancia = TextEditingController();
   // Preço em centavos (2 casas) e peso em gramas (3 casas).
+  final _scroll = ScrollController();
   final _precoFormatter = DecimalInputFormatter(decimalDigits: 2);
   final _pesoFormatter = DecimalInputFormatter(decimalDigits: 3);
   final _estoqueInicial = TextEditingController();
+  final _minimoCentral = TextEditingController();
+  final _minimoCondominio = TextEditingController();
   final _motivoEstoque = TextEditingController(text: 'Carga inicial');
   final _ncm = TextEditingController();
   final _cest = TextEditingController();
@@ -74,6 +79,12 @@ class _CadastraProdutoState extends State<CadastraProduto> {
   List<Promocao> _promocoesAtivas = const [];
 
   bool get _editing => widget.produto != null || _savedId != null;
+
+  /// Produto que, salvo assim, não fica à venda em lugar nenhum.
+  bool get _semCondominio =>
+      !_todosCondominios &&
+      _condominios.isNotEmpty &&
+      !_associacoes.values.any((associado) => associado);
 
   static const _categorias = [
     'BEBIDA',
@@ -129,6 +140,8 @@ class _CadastraProdutoState extends State<CadastraProduto> {
     final product = widget.produto;
     if (product == null) {
       _barcodes.add(_BarcodeEditor(principal: true));
+      // Produto novo já nasce à venda em todos os Condomínios.
+      _todosCondominios = true;
     } else {
       _sku.text = product.codigoInterno;
       _nome.text = product.nome;
@@ -140,6 +153,10 @@ class _CadastraProdutoState extends State<CadastraProduto> {
       if (tolerancia != null) {
         _tolerancia.text = _pesoFormatter.format(_toUnits(tolerancia, 3));
       }
+      _minimoCentral.text =
+          product.estoqueMinimoCentral?.friendly.replaceAll('.', ',') ?? '';
+      _minimoCondominio.text =
+          product.estoqueMinimoCondominio?.friendly.replaceAll('.', ',') ?? '';
       _todosCondominios = product.disponivelTodosCondominios;
       _todosCondominiosOriginal = product.disponivelTodosCondominios;
       _categoria = product.categoria;
@@ -237,6 +254,8 @@ class _CadastraProdutoState extends State<CadastraProduto> {
       _peso,
       _tolerancia,
       _estoqueInicial,
+      _minimoCentral,
+      _minimoCondominio,
       _motivoEstoque,
       _ncm,
       _cest,
@@ -250,6 +269,7 @@ class _CadastraProdutoState extends State<CadastraProduto> {
     for (final barcode in _barcodes) {
       barcode.dispose();
     }
+    _scroll.dispose();
     super.dispose();
   }
 
@@ -293,6 +313,24 @@ class _CadastraProdutoState extends State<CadastraProduto> {
     );
   }
 
+  /// Vazio ou zero significa "sem mínimo".
+  static DecimalValue? _minimoOrNull(TextEditingController controller) {
+    if (controller.text.trim().isEmpty) return null;
+    final value = DecimalValue.parse(controller.text, maxScale: 3);
+    return value.isPositive ? value : null;
+  }
+
+  static String? _minimoValidator(String? value) {
+    if (value == null || value.trim().isEmpty) return null;
+    try {
+      return DecimalValue.parse(value, maxScale: 3).isNegative
+          ? 'O estoque mínimo não pode ser negativo'
+          : null;
+    } on FormatException catch (error) {
+      return error.message;
+    }
+  }
+
   DecimalValue? _maskedOrNull(TextEditingController controller, int digits) =>
       controller.text.trim().isEmpty
       ? null
@@ -305,6 +343,8 @@ class _CadastraProdutoState extends State<CadastraProduto> {
 
   Produto _buildProduct() {
     final codes = _barcodes
+        // Campo de código deixado em branco (produto só com SKU) não é enviado.
+        .where((item) => item.codigo.text.trim().isNotEmpty)
         .map(
           (item) => ProdutoCodigoBarras(
             codigo: item.codigo.text.trim(),
@@ -334,7 +374,9 @@ class _CadastraProdutoState extends State<CadastraProduto> {
     );
     return Produto(
       id: _savedId ?? widget.produto?.id,
-      codigoInterno: _sku.text.trim(),
+      codigoInterno: _sku.text.trim().isNotEmpty
+          ? _sku.text.trim()
+          : (active.where((item) => item.principal).firstOrNull?.codigo ?? ''),
       codigosBarras: codes,
       nome: _nome.text.trim(),
       descricao: _textOrNull(_descricao),
@@ -343,6 +385,8 @@ class _CadastraProdutoState extends State<CadastraProduto> {
       categoria: _categoria,
       peso: _maskedOrNull(_peso, 3),
       pesoTolerancia: _maskedOrNull(_tolerancia, 3),
+      estoqueMinimoCentral: _minimoOrNull(_minimoCentral),
+      estoqueMinimoCondominio: _minimoOrNull(_minimoCondominio),
       ativo: _ativo,
       fiscal: fiscal.isEmpty ? null : fiscal,
       foto: widget.produto?.foto,
@@ -355,7 +399,11 @@ class _CadastraProdutoState extends State<CadastraProduto> {
   }
 
   Future<void> _salvar() async {
-    if (_saving || !_formKey.currentState!.validate()) return;
+    if (_saving) return;
+    if (!_formKey.currentState!.validate()) {
+      _mostrarPrimeiroErro();
+      return;
+    }
     setState(() {
       _saving = true;
       _error = null;
@@ -381,9 +429,8 @@ class _CadastraProdutoState extends State<CadastraProduto> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            widget.produto == null
-                ? 'Produto cadastrado com sucesso.'
-                : 'Produto atualizado com sucesso.',
+            '${widget.produto == null ? 'Produto cadastrado com sucesso.' : 'Produto atualizado com sucesso.'}'
+            '${_semCondominio ? ' Ele ainda não está disponível em nenhum condomínio.' : ''}',
           ),
         ),
       );
@@ -406,8 +453,57 @@ class _CadastraProdutoState extends State<CadastraProduto> {
             : 'O produto foi salvo, mas uma etapa de estoque ou disponibilidade falhou: $error';
       });
     } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted) {
+        setState(() => _saving = false);
+        // O aviso de erro fica no topo; o botão Salvar pode estar lá embaixo.
+        if (_error != null && _scroll.hasClients) {
+          _scroll.animateTo(
+            0,
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+          );
+        }
+      }
     }
+  }
+
+  /// Rola até o primeiro campo recusado pela validação.
+  void _mostrarPrimeiroErro() {
+    BuildContext? primeiro;
+    void visitar(Element element) {
+      if (primeiro != null) return;
+      if (element is StatefulElement) {
+        final state = element.state;
+        if (state is FormFieldState && state.hasError) {
+          primeiro = element;
+          return;
+        }
+      }
+      element.visitChildren(visitar);
+    }
+
+    _formKey.currentContext?.visitChildElements(visitar);
+    final alvo = primeiro;
+    if (alvo == null) return;
+    Scrollable.ensureVisible(
+      alvo,
+      alignment: 0.1,
+      duration: const Duration(milliseconds: 200),
+    );
+  }
+
+  Future<void> _abrirEstoque() async {
+    final id = _savedId ?? widget.produto?.id;
+    if (id == null) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EstoqueProdutoPage(
+          produtoId: id,
+          nome: _nome.text.trim().isEmpty ? 'Produto' : _nome.text.trim(),
+        ),
+      ),
+    );
   }
 
   Future<void> _syncAvailability(String produtoId) async {
@@ -536,6 +632,7 @@ class _CadastraProdutoState extends State<CadastraProduto> {
       body: Form(
         key: _formKey,
         child: SingleChildScrollView(
+          controller: _scroll,
           child: AppContent(
             maxWidth: AppLayout.contentMaxWidth,
             child: Column(
@@ -551,28 +648,26 @@ class _CadastraProdutoState extends State<CadastraProduto> {
                 ],
                 LayoutBuilder(
                   builder: (context, constraints) {
-                    final main = [
-                      _generalSection(),
-                      gap,
-                      _priceSection(),
-                      gap,
-                      _barcodeSection(),
-                      gap,
-                      _fiscalSection(),
-                    ];
+                    final main = [_generalSection()];
+                    final optional = [_moreSection(), gap, _fiscalSection()];
                     final side = [
-                      _stockSection(),
-                      gap,
                       _availabilitySection(),
-                      gap,
-                      _promotionsSection(),
+                      // Saldo e promoções só existem para produto já cadastrado.
+                      if (_editing) ...[
+                        gap,
+                        _stockSection(),
+                        gap,
+                        _promotionsSection(),
+                      ],
                     ];
                     if (constraints.maxWidth < 1000) {
+                      // No celular o essencial vem primeiro e o opcional por último.
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [...main, gap, ...side],
+                        children: [...main, gap, ...side, gap, ...optional],
                       );
                     }
+                    main.addAll([gap, ...optional]);
                     return Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -616,310 +711,397 @@ class _CadastraProdutoState extends State<CadastraProduto> {
     );
   }
 
-  Widget _generalSection() => _SectionCard(
-    key: const Key('product-general-section'),
-    title: 'Dados gerais',
-    icon: Icons.inventory_2_outlined,
-    child: Column(
-      children: [
-        _ResponsiveFields(
-          children: [
-            TextFormField(
-              key: const Key('product-sku-field'),
-              controller: _sku,
-              decoration: const InputDecoration(
-                labelText: 'Código interno / SKU',
-                helperText: 'Único dentro da empresa',
-              ),
-              validator: _required,
-            ),
-            TextFormField(
-              key: const Key('product-name-field'),
-              controller: _nome,
-              decoration: const InputDecoration(labelText: 'Nome'),
-              validator: _required,
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.md),
-        TextFormField(
-          controller: _descricao,
-          decoration: const InputDecoration(labelText: 'Descrição'),
-          maxLines: 3,
-        ),
-        const SizedBox(height: AppSpacing.md),
-        _ResponsiveFields(
-          children: [
-            DropdownButtonFormField<String>(
-              initialValue: _categoria,
-              decoration: const InputDecoration(labelText: 'Categoria'),
-              items: _categorias
-                  .map(
-                    (value) =>
-                        DropdownMenuItem(value: value, child: Text(value)),
-                  )
-                  .toList(),
-              onChanged: (value) =>
-                  setState(() => _categoria = value ?? 'OUTROS'),
-            ),
-            DropdownButtonFormField<String>(
-              initialValue: _unidade,
-              decoration: const InputDecoration(labelText: 'Unidade de medida'),
-              items: _unidades
-                  .map(
-                    (value) =>
-                        DropdownMenuItem(value: value, child: Text(value)),
-                  )
-                  .toList(),
-              onChanged: (value) => setState(() => _unidade = value ?? 'UN'),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.md),
-        _ResponsiveFields(
-          children: [
-            TextFormField(
-              key: const Key('product-weight-field'),
-              controller: _peso,
-              keyboardType: TextInputType.number,
-              inputFormatters: [_pesoFormatter],
-              decoration: const InputDecoration(
-                labelText: 'Peso',
-                hintText: '0,000',
-                suffixText: 'kg',
-              ),
-              validator: (value) => _maskedPositive(value, optional: true),
-            ),
-            TextFormField(
-              controller: _tolerancia,
-              keyboardType: TextInputType.number,
-              inputFormatters: [_pesoFormatter],
-              decoration: const InputDecoration(
-                labelText: 'Tolerância de peso',
-                hintText: '0,000',
-                suffixText: 'kg',
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.md),
-        Row(
-          children: [
-            _ImagePreview(bytes: _imageBytes, imageUrl: widget.produto?.foto),
-            const SizedBox(width: AppSpacing.lg),
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: _saving ? null : _pickImage,
-                icon: const Icon(Icons.add_photo_alternate_outlined),
-                label: Text(
-                  _imageBytes == null ? 'Selecionar foto' : 'Trocar foto',
+  /// Código mostrado junto dos dados do produto; os demais ficam em
+  /// "Códigos adicionais e peso".
+  int get _principalIndex {
+    final index = _barcodes.indexWhere((item) => item.ativo && item.principal);
+    return index >= 0 ? index : (_barcodes.isEmpty ? -1 : 0);
+  }
+
+  Widget _generalSection() {
+    final principal = _principalIndex;
+    return _SectionCard(
+      key: const Key('product-general-section'),
+      title: 'Produto',
+      icon: Icons.inventory_2_outlined,
+      child: Column(
+        children: [
+          Row(
+            children: [
+              _ImagePreview(bytes: _imageBytes, imageUrl: widget.produto?.foto),
+              const SizedBox(width: AppSpacing.lg),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _saving ? null : _pickImage,
+                  icon: const Icon(Icons.add_photo_alternate_outlined),
+                  label: Text(
+                    _imageBytes == null ? 'Selecionar foto' : 'Trocar foto',
+                  ),
                 ),
               ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          TextFormField(
+            key: const Key('product-name-field'),
+            controller: _nome,
+            decoration: const InputDecoration(labelText: 'Nome'),
+            validator: _required,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _ResponsiveFields(
+            children: [
+              if (principal >= 0)
+                TextFormField(
+                  key: Key('barcode-field-$principal'),
+                  controller: _barcodes[principal].codigo,
+                  decoration: InputDecoration(
+                    labelText: 'Código de barras',
+                    suffixIcon: kIsWeb
+                        ? null
+                        : IconButton(
+                            tooltip: 'Ler com a câmera',
+                            onPressed: () => _scan(principal),
+                            icon: const Icon(Icons.qr_code_scanner),
+                          ),
+                  ),
+                  // Um dos dois identifica o produto: código de barras ou SKU.
+                  validator: (value) =>
+                      (value ?? '').trim().isEmpty && _sku.text.trim().isEmpty
+                      ? 'Informe o código de barras ou o SKU'
+                      : null,
+                ),
+              TextFormField(
+                key: const Key('product-sku-field'),
+                controller: _sku,
+                decoration: InputDecoration(
+                  labelText: 'Código interno / SKU',
+                  helperText: principal >= 0
+                      ? 'Opcional. Se vazio, usa o código de barras'
+                      : 'Único dentro da empresa',
+                ),
+                validator: principal >= 0 ? null : _required,
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _ResponsiveFields(
+            children: [
+              TextFormField(
+                key: const Key('product-price-field'),
+                controller: _preco,
+                keyboardType: TextInputType.number,
+                inputFormatters: [_precoFormatter],
+                decoration: const InputDecoration(
+                  labelText: 'Preço de venda',
+                  prefixText: 'R\$ ',
+                  hintText: '0,00',
+                ),
+                validator: _maskedPositive,
+              ),
+              DropdownButtonFormField<String>(
+                initialValue: _categoria,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Categoria'),
+                items: _categorias
+                    .map(
+                      (value) => DropdownMenuItem(
+                        value: value,
+                        child: Text(ProdutoLabels.categoria(value)),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) =>
+                    setState(() => _categoria = value ?? 'OUTROS'),
+              ),
+              DropdownButtonFormField<String>(
+                initialValue: _unidade,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Unidade de medida',
+                ),
+                items: _unidades
+                    .map(
+                      (value) => DropdownMenuItem(
+                        value: value,
+                        child: Text(ProdutoLabels.unidade(value)),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) => setState(() => _unidade = value ?? 'UN'),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          TextFormField(
+            controller: _descricao,
+            decoration: const InputDecoration(
+              labelText: 'Descrição (opcional)',
             ),
-          ],
-        ),
-        SwitchListTile.adaptive(
-          contentPadding: EdgeInsets.zero,
-          value: _ativo,
-          title: const Text('Produto ativo'),
-          subtitle: const Text('Produtos inativos deixam de ser ofertados.'),
-          onChanged: _saving ? null : (value) => setState(() => _ativo = value),
-        ),
-      ],
-    ),
-  );
+            maxLines: 3,
+          ),
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            value: _ativo,
+            title: const Text('Produto ativo'),
+            subtitle: const Text('Produtos inativos deixam de ser ofertados.'),
+            onChanged: _saving
+                ? null
+                : (value) => setState(() => _ativo = value),
+          ),
+        ],
+      ),
+    );
+  }
 
-  Widget _priceSection() => _SectionCard(
-    key: const Key('product-price-section'),
-    title: 'Preço',
-    icon: Icons.sell_outlined,
+  Widget _moreSection() {
+    final principal = _principalIndex;
+    final product = widget.produto;
+    return _SectionCard(
+      key: const Key('product-more-section'),
+      title: 'Códigos adicionais e peso',
+      subtitle: 'Opcional',
+      icon: Icons.qr_code_2_outlined,
+      collapsible: true,
+      initiallyExpanded:
+          product != null &&
+          (product.codigosBarras.length > 1 ||
+              product.peso != null ||
+              product.pesoTolerancia != null),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (var index = 0; index < _barcodes.length; index++)
+            if (index != principal)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                child: _BarcodeCard(
+                  editor: _barcodes[index],
+                  index: index,
+                  scannerAvailable: !kIsWeb,
+                  onScan: () => _scan(index),
+                  onPrincipal: () => _setPrincipal(index),
+                  onActive: (value) => _toggleBarcode(index, value),
+                  onRemove: () => _removeBarcode(index),
+                  requiredValidator: _required,
+                ),
+              ),
+          TextButton.icon(
+            key: const Key('add-barcode-button'),
+            onPressed: _saving
+                ? null
+                : () => setState(() => _barcodes.add(_BarcodeEditor())),
+            icon: const Icon(Icons.add),
+            label: const Text('Adicionar código de barras'),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          _ResponsiveFields(
+            children: [
+              TextFormField(
+                key: const Key('product-weight-field'),
+                controller: _peso,
+                keyboardType: TextInputType.number,
+                inputFormatters: [_pesoFormatter],
+                decoration: const InputDecoration(
+                  labelText: 'Peso',
+                  hintText: '0,000',
+                  suffixText: 'kg',
+                ),
+                validator: (value) => _maskedPositive(value, optional: true),
+              ),
+              TextFormField(
+                controller: _tolerancia,
+                keyboardType: TextInputType.number,
+                inputFormatters: [_pesoFormatter],
+                decoration: const InputDecoration(
+                  labelText: 'Tolerância de peso',
+                  hintText: '0,000',
+                  suffixText: 'kg',
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Só na edição: o saldo é tratado na página de estoque do produto.
+  Widget _stockSection() => _SectionCard(
+    key: const Key('product-stock-section'),
+    title: 'Estoque',
+    icon: Icons.warehouse_outlined,
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        TextFormField(
-          key: const Key('product-price-field'),
-          controller: _preco,
-          keyboardType: TextInputType.number,
-          inputFormatters: [_precoFormatter],
-          decoration: const InputDecoration(
-            labelText: 'Preço de venda',
-            prefixText: 'R\$ ',
-            hintText: '0,00',
-          ),
-          validator: _maskedPositive,
+        const Text(
+          'Saldo, histórico e correções ficam na página de estoque do produto.',
         ),
-        const SizedBox(height: AppSpacing.lg),
-        Text(
-          'O valor é enviado como decimal textual e persistido em DECIMAL(15,6).',
-          style: Theme.of(context).textTheme.bodySmall,
+        const SizedBox(height: AppSpacing.md),
+        OutlinedButton.icon(
+          key: const Key('product-stock-link'),
+          onPressed: _abrirEstoque,
+          icon: const Icon(Icons.inventory_2_outlined, size: 18),
+          label: const Text('Ver estoque deste produto'),
         ),
       ],
     ),
   );
 
-  Widget _barcodeSection() => _SectionCard(
-    key: const Key('product-barcodes-section'),
-    title: 'Códigos de barras',
-    icon: Icons.qr_code_2_outlined,
-    action: TextButton.icon(
-      onPressed: _saving
-          ? null
-          : () => setState(() {
-              final principal = !_barcodes.any(
-                (item) => item.ativo && item.principal,
-              );
-              _barcodes.add(_BarcodeEditor(principal: principal));
-            }),
-      icon: const Icon(Icons.add),
-      label: const Text('Adicionar código'),
+  /// Só no cadastro novo: entrada inicial opcional no estoque central.
+  List<Widget> _initialStock() => [
+    const Text(
+      'Opcional. Ao salvar, será criada uma entrada e sua movimentação.',
     ),
-    child: Column(
+    const SizedBox(height: AppSpacing.md),
+    _ResponsiveFields(
       children: [
-        if (_barcodes.isEmpty)
-          const ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: Icon(Icons.info_outline),
-            title: Text('Nenhum código de barras informado'),
-            subtitle: Text(
-              'O SKU continuará identificando o produto internamente.',
-            ),
+        TextFormField(
+          key: const Key('initial-stock-field'),
+          controller: _estoqueInicial,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(
+            labelText: 'Quantidade inicial',
+            helperText: 'Até 3 casas decimais',
           ),
-        for (var index = 0; index < _barcodes.length; index++)
-          Padding(
-            padding: EdgeInsets.only(top: index == 0 ? 0 : AppSpacing.md),
-            child: _BarcodeCard(
-              editor: _barcodes[index],
-              index: index,
-              scannerAvailable: !kIsWeb,
-              onScan: () => _scan(index),
-              onPrincipal: () => _setPrincipal(index),
-              onActive: (value) => _toggleBarcode(index, value),
-              onRemove: () => _removeBarcode(index),
-              requiredValidator: _required,
-            ),
-          ),
+          validator: (value) {
+            if (value == null || value.trim().isEmpty) return null;
+            try {
+              return DecimalValue.parse(value, maxScale: 3).isPositive
+                  ? null
+                  : 'Informe uma quantidade maior que zero';
+            } on FormatException catch (error) {
+              return error.message;
+            }
+          },
+        ),
+        TextFormField(
+          controller: _motivoEstoque,
+          decoration: const InputDecoration(labelText: 'Motivo'),
+          validator: (value) =>
+              _estoqueInicial.text.trim().isNotEmpty ? _required(value) : null,
+        ),
       ],
     ),
-  );
-
-  Widget _stockSection() => _SectionCard(
-    key: const Key('product-stock-section'),
-    title: 'Estoque central da empresa',
-    icon: Icons.warehouse_outlined,
-    child: _editing
-        ? const ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: Icon(Icons.info_outline),
-            title: Text('O saldo não faz parte do cadastro do produto'),
-            subtitle: Text(
-              'Use o módulo Estoque para entradas, saídas e ajustes auditáveis.',
-            ),
-          )
-        : Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Opcional. Ao salvar, será criada uma entrada e sua movimentação.',
-              ),
-              const SizedBox(height: AppSpacing.md),
-              _ResponsiveFields(
-                children: [
-                  TextFormField(
-                    key: const Key('initial-stock-field'),
-                    controller: _estoqueInicial,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: const InputDecoration(
-                      labelText: 'Quantidade inicial',
-                      helperText: 'Até 3 casas decimais',
-                    ),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) return null;
-                      try {
-                        return DecimalValue.parse(value, maxScale: 3).isPositive
-                            ? null
-                            : 'Informe uma quantidade maior que zero';
-                      } on FormatException catch (error) {
-                        return error.message;
-                      }
-                    },
-                  ),
-                  TextFormField(
-                    controller: _motivoEstoque,
-                    decoration: const InputDecoration(labelText: 'Motivo'),
-                    validator: (value) => _estoqueInicial.text.trim().isNotEmpty
-                        ? _required(value)
-                        : null,
-                  ),
-                ],
-              ),
-            ],
-          ),
-  );
+  ];
 
   Widget _availabilitySection() => _SectionCard(
     key: const Key('product-availability-section'),
-    title: 'Disponibilidade nos mercados',
+    title: 'Onde vender',
     icon: Icons.apartment_outlined,
-    child: _loadingCondominios
-        ? const LinearProgressIndicator()
-        : _condominiosError != null
-        ? ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.cloud_off_outlined),
-            title: const Text('Não foi possível carregar os condomínios'),
-            subtitle: Text(_condominiosError!),
-            trailing: IconButton(
-              onPressed: _loadCondominios,
-              icon: const Icon(Icons.refresh),
-            ),
-          )
-        : _condominios.isEmpty
-        ? const ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: Icon(Icons.info_outline),
-            title: Text('Nenhum condomínio ativo cadastrado'),
-          )
-        : Column(
-            children: [
-              SwitchListTile.adaptive(
-                key: const Key('product-all-condominiums-switch'),
-                contentPadding: EdgeInsets.zero,
-                value: _todosCondominios,
-                title: const Text('Disponível em todos os condomínios'),
-                subtitle: const Text(
-                  'Inclui os condomínios cadastrados depois.',
-                ),
-                onChanged: _saving
-                    ? null
-                    : (value) => setState(() => _todosCondominios = value),
-              ),
-              const Divider(height: 1),
-              for (var index = 0; index < _condominios.length; index++) ...[
-                CheckboxListTile(
-                  contentPadding: EdgeInsets.zero,
-                  value:
-                      _todosCondominios ||
-                      (_associacoes[_condominios[index].condominioId] ?? false),
-                  title: Text(_condominios[index].condominioNome),
-                  subtitle: _condominios[index].quantidade == null
-                      ? null
-                      : Text(
-                          'Saldo local: ${_condominios[index].quantidade!.friendly}',
-                        ),
-                  onChanged: _saving || _todosCondominios
-                      ? null
-                      : (value) => setState(() {
-                          _associacoes[_condominios[index].condominioId] =
-                              value ?? false;
-                        }),
-                ),
-                if (index != _condominios.length - 1) const Divider(height: 1),
-              ],
-            ],
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _condominiosWidget(),
+        if (!_editing) ...[
+          const SizedBox(height: AppSpacing.xl),
+          Text(
+            'Estoque inicial no central',
+            style: Theme.of(context).textTheme.titleSmall,
           ),
+          const SizedBox(height: AppSpacing.xs),
+          ..._initialStock(),
+        ],
+        const SizedBox(height: AppSpacing.xl),
+        Text('Estoque mínimo', style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: AppSpacing.xs),
+        const Text(
+          'Opcional. Abaixo dessa quantidade o produto aparece como estoque baixo.',
+        ),
+        const SizedBox(height: AppSpacing.md),
+        _ResponsiveFields(
+          children: [
+            TextFormField(
+              key: const Key('product-min-central-field'),
+              controller: _minimoCentral,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: const InputDecoration(
+                labelText: 'Mínimo no estoque central',
+              ),
+              validator: _minimoValidator,
+            ),
+            TextFormField(
+              key: const Key('product-min-condominium-field'),
+              controller: _minimoCondominio,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: const InputDecoration(
+                labelText: 'Mínimo em cada condomínio',
+              ),
+              validator: _minimoValidator,
+            ),
+          ],
+        ),
+      ],
+    ),
   );
+
+  Widget _condominiosWidget() => _loadingCondominios
+      ? const LinearProgressIndicator()
+      : _condominiosError != null
+      ? ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.cloud_off_outlined),
+          title: const Text('Não foi possível carregar os condomínios'),
+          subtitle: Text(_condominiosError!),
+          trailing: IconButton(
+            onPressed: _loadCondominios,
+            icon: const Icon(Icons.refresh),
+          ),
+        )
+      : _condominios.isEmpty
+      ? const ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: Icon(Icons.info_outline),
+          title: Text('Nenhum condomínio ativo cadastrado'),
+        )
+      : Column(
+          children: [
+            SwitchListTile.adaptive(
+              key: const Key('product-all-condominiums-switch'),
+              contentPadding: EdgeInsets.zero,
+              value: _todosCondominios,
+              title: const Text('Disponível em todos os condomínios'),
+              subtitle: const Text('Inclui os condomínios cadastrados depois.'),
+              onChanged: _saving
+                  ? null
+                  : (value) => setState(() => _todosCondominios = value),
+            ),
+            const Divider(height: 1),
+            for (var index = 0; index < _condominios.length; index++) ...[
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                value:
+                    _todosCondominios ||
+                    (_associacoes[_condominios[index].condominioId] ?? false),
+                title: Text(_condominios[index].condominioNome),
+                subtitle: _condominios[index].quantidade == null
+                    ? null
+                    : Text(
+                        'Saldo local: ${_condominios[index].quantidade!.friendly}',
+                      ),
+                onChanged: _saving || _todosCondominios
+                    ? null
+                    : (value) => setState(() {
+                        _associacoes[_condominios[index].condominioId] =
+                            value ?? false;
+                      }),
+              ),
+              if (index != _condominios.length - 1) const Divider(height: 1),
+            ],
+            if (_semCondominio) ...[
+              const SizedBox(height: AppSpacing.md),
+              const AppBanner(
+                key: Key('product-no-condominium-warning'),
+                message:
+                    'Sem nenhum condomínio marcado, o produto não aparece em nenhum terminal.',
+              ),
+            ],
+          ],
+        );
 
   Widget _fiscalSection() => _SectionCard(
     key: const Key('product-fiscal-section'),
@@ -1020,11 +1202,7 @@ class _CadastraProdutoState extends State<CadastraProduto> {
           ListTile(
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.info_outline),
-            title: Text(
-              _editing
-                  ? 'Nenhuma promoção ativa para este produto'
-                  : 'Promoções poderão ser associadas após o cadastro',
-            ),
+            title: Text('Nenhuma promoção ativa para este produto'),
           )
         else ...[
           Text(
@@ -1037,9 +1215,13 @@ class _CadastraProdutoState extends State<CadastraProduto> {
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.local_offer_outlined),
               title: Text(promocao.nome),
-              subtitle: Text(
-                '${promocao.tipo.apiName} · ${promocao.valor.friendly}',
-              ),
+              subtitle: Text(switch (promocao.tipo) {
+                TipoPromocao.percentual =>
+                  '${promocao.valor.friendly}% de desconto',
+                TipoPromocao.descontoFixo =>
+                  '${promocao.valor.currency} de desconto',
+                TipoPromocao.precoFixo => 'Por ${promocao.valor.currency}',
+              }),
             ),
         ],
         const SizedBox(height: AppSpacing.md),
@@ -1083,7 +1265,6 @@ class _SectionCard extends StatefulWidget {
     required this.icon,
     required this.child,
     this.subtitle,
-    this.action,
     this.collapsible = false,
     this.initiallyExpanded = false,
     super.key,
@@ -1092,7 +1273,6 @@ class _SectionCard extends StatefulWidget {
   final String? subtitle;
   final IconData icon;
   final Widget child;
-  final Widget? action;
   final bool collapsible;
   final bool initiallyExpanded;
   @override
@@ -1135,21 +1315,6 @@ class _SectionCardState extends State<_SectionCard> {
                     ),
                   )
                 : null;
-            if (widget.action != null && constraints.maxWidth < 480) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(child: heading),
-                      ?toggle,
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  Align(alignment: Alignment.centerLeft, child: widget.action!),
-                ],
-              );
-            }
             return InkWell(
               onTap: widget.collapsible
                   ? () => setState(() => _expanded = !_expanded)
@@ -1157,10 +1322,6 @@ class _SectionCardState extends State<_SectionCard> {
               child: Row(
                 children: [
                   Expanded(child: heading),
-                  if (widget.action != null) ...[
-                    const SizedBox(width: AppSpacing.md),
-                    widget.action!,
-                  ],
                   ?toggle,
                 ],
               ),

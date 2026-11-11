@@ -365,6 +365,33 @@ void main() {
     );
   });
 
+  testWidgets('saldo abaixo do mínimo aparece como estoque baixo', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      EstoqueCondominioPage(
+        condominioId: 'c1',
+        repository: _FakeRepository(
+          estoqueCondo: [
+            {
+              'produtoId': 'p1',
+              'produto': 'Água 500ml',
+              'quantidade': 4,
+              'ativo': true,
+              'estoqueMinimo': 6,
+              'abaixoDoMinimo': true,
+            },
+          ],
+        ),
+      ),
+      size: const Size(1400, 900),
+    );
+
+    expect(find.text('Estoque baixo (mín. 6)'), findsOneWidget);
+    expect(find.text('Ativo'), findsNothing);
+  });
+
   testWidgets('saldo do condomínio mostra unidade, SKU e categoria', (
     tester,
   ) async {

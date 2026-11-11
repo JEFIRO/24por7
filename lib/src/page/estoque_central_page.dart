@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_motion.dart';
 import '../../core/widgets/app_refresh.dart';
+import '../../core/formatters/produto_labels.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/widgets/app_content.dart';
 import '../../core/widgets/async_state.dart';
@@ -159,7 +160,7 @@ class _EstoqueCentralPageState extends State<EstoqueCentralPage> {
                           ..._categorias.map(
                             (value) => DropdownMenuItem(
                               value: value,
-                              child: Text(_categoriaLabel(value)),
+                              child: Text(ProdutoLabels.categoria(value)),
                             ),
                           ),
                         ],
@@ -223,6 +224,8 @@ class _EstoqueCentralPageState extends State<EstoqueCentralPage> {
       fontWeight: FontWeight.w600,
       color: item.quantidade.isNegative ? theme.colorScheme.error : null,
     );
+    String minimo(EstoqueCentral item) =>
+        'Estoque baixo (mín. ${item.estoqueMinimo?.friendly.replaceAll('.', ',') ?? '—'})';
     if (mobile) {
       return Column(
         children: [
@@ -231,7 +234,8 @@ class _EstoqueCentralPageState extends State<EstoqueCentralPage> {
               title: item.produto,
               muted: !item.ativo,
               meta:
-                  'SKU ${item.codigoInterno} · ${item.localizacao?.isNotEmpty == true ? item.localizacao : 'Sem localização'}',
+                  'SKU ${item.codigoInterno} · ${item.localizacao?.isNotEmpty == true ? item.localizacao : 'Sem localização'}'
+                  '${item.abaixoDoMinimo ? '\n${minimo(item)}' : ''}',
               trailing: Text(
                 '${item.quantidade.fixedScale(3).replaceAll('.', ',')} ${item.unidadeMedida}',
                 style: balanceStyle(item),
@@ -267,7 +271,7 @@ class _EstoqueCentralPageState extends State<EstoqueCentralPage> {
                   ],
                 ),
               ),
-              DataCell(Text(_categoriaLabel(item.categoria))),
+              DataCell(Text(ProdutoLabels.categoria(item.categoria))),
               DataCell(
                 Text(
                   item.localizacao?.isNotEmpty == true
@@ -283,12 +287,17 @@ class _EstoqueCentralPageState extends State<EstoqueCentralPage> {
                 ),
               ),
               DataCell(
-                item.ativo
-                    ? const AppStatusBadge(
+                !item.ativo
+                    ? const AppStatusBadge(label: 'Inativo')
+                    : item.abaixoDoMinimo
+                    ? AppStatusBadge(
+                        label: minimo(item),
+                        tone: AppStatusTone.warning,
+                      )
+                    : const AppStatusBadge(
                         label: 'Ativo',
                         tone: AppStatusTone.success,
-                      )
-                    : const AppStatusBadge(label: 'Inativo'),
+                      ),
               ),
             ],
           ),
@@ -701,8 +710,3 @@ const _categorias = <String>[
   'DESCARTAVEIS',
   'OUTROS',
 ];
-
-String _categoriaLabel(String value) {
-  final text = value.replaceAll('_', ' ').toLowerCase();
-  return text.isEmpty ? text : '${text[0].toUpperCase()}${text.substring(1)}';
-}

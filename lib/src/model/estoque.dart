@@ -13,6 +13,10 @@ class EstoqueCentral {
   final String? localizacao;
   final DecimalValue? capacidadePosicao;
 
+  /// Mínimo do produto no central; null = sem mínimo definido.
+  final DecimalValue? estoqueMinimo;
+  final bool abaixoDoMinimo;
+
   const EstoqueCentral({
     required this.id,
     required this.produtoId,
@@ -25,6 +29,8 @@ class EstoqueCentral {
     required this.ativo,
     this.localizacao,
     this.capacidadePosicao,
+    this.estoqueMinimo,
+    this.abaixoDoMinimo = false,
   });
 
   factory EstoqueCentral.fromJson(Map<String, dynamic> json) => EstoqueCentral(
@@ -41,6 +47,10 @@ class EstoqueCentral {
     capacidadePosicao: json['capacidadePosicao'] == null
         ? null
         : DecimalValue.fromJson(json['capacidadePosicao']),
+    estoqueMinimo: json['estoqueMinimo'] == null
+        ? null
+        : DecimalValue.fromJson(json['estoqueMinimo']),
+    abaixoDoMinimo: json['abaixoDoMinimo'] == true,
   );
 }
 

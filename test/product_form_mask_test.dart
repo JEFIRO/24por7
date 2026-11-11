@@ -115,6 +115,11 @@ void main() {
     await _fill(tester, preco: '1500');
     expect(_text(tester, 'product-price-field'), '15,00');
 
+    // Peso fica nos opcionais, recolhidos por padrão.
+    final opcionais = find.text('Códigos adicionais e peso');
+    await tester.ensureVisible(opcionais);
+    await tester.tap(opcionais);
+    await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const Key('product-weight-field')),
       '1250',
@@ -125,6 +130,85 @@ void main() {
     expect(repository.saved?.preco.persistence, '15.000000');
     expect(repository.saved?.toRequestJson()['peso'], '1.250');
     expect(repository.saved?.pesoTolerancia, isNull);
+  });
+
+  testWidgets('sem SKU, o código de barras identifica o produto', (
+    tester,
+  ) async {
+    final repository = _FakeProdutoRepository();
+    await _pump(tester, CadastraProduto(repository: repository));
+    await _fill(tester, preco: '1099');
+    await tester.enterText(find.byKey(const Key('product-sku-field')), '');
+
+    await _save(tester);
+    expect(repository.saved?.codigoInterno, '7894900011517');
+    expect(repository.saved?.codigoBarrasPrincipal, '7894900011517');
+  });
+
+  testWidgets('produto só com SKU é salvo sem código de barras', (
+    tester,
+  ) async {
+    final repository = _FakeProdutoRepository();
+    await _pump(tester, CadastraProduto(repository: repository));
+    await _fill(tester, preco: '1099');
+    await tester.enterText(find.byKey(const Key('barcode-field-0')), '');
+
+    await _save(tester);
+    expect(repository.saved?.codigoInterno, 'SKU-1');
+    expect(repository.saved?.codigosBarras, isEmpty);
+  });
+
+  testWidgets('sem SKU e sem código de barras o cadastro é recusado', (
+    tester,
+  ) async {
+    final repository = _FakeProdutoRepository();
+    await _pump(tester, CadastraProduto(repository: repository));
+    await _fill(tester, preco: '1099');
+    await tester.enterText(find.byKey(const Key('product-sku-field')), '');
+    await tester.enterText(find.byKey(const Key('barcode-field-0')), '');
+
+    await _save(tester);
+    expect(find.text('Informe o código de barras ou o SKU'), findsOneWidget);
+    expect(repository.saved, isNull);
+  });
+
+  testWidgets('estoque mínimo vai no cadastro e vazio vai como sem mínimo', (
+    tester,
+  ) async {
+    final repository = _FakeProdutoRepository();
+    await _pump(tester, CadastraProduto(repository: repository));
+    await _fill(tester, preco: '1099');
+    await tester.enterText(
+      find.byKey(const Key('product-min-central-field')),
+      '10',
+    );
+    await _save(tester);
+
+    final json = repository.saved!.toRequestJson();
+    expect(json['estoqueMinimoCentral'], '10.000');
+    // Zero é o que limpa o mínimo no backend.
+    expect(json['estoqueMinimoCondominio'], '0.000');
+  });
+
+  testWidgets('edição abre o estoque mínimo já preenchido', (tester) async {
+    await _pump(
+      tester,
+      CadastraProduto(
+        repository: _FakeProdutoRepository(),
+        promocaoRepository: _FakePromocaoRepository(),
+        produto: Produto.fromJson({
+          'id': 'product-1',
+          'codigoInterno': 'SKU-1',
+          'nome': 'Produto',
+          'preco': '10.99',
+          'estoqueMinimoCentral': '12.000',
+          'estoqueMinimoCondominio': '2.500',
+        }),
+      ),
+    );
+
+    expect(_text(tester, 'product-min-central-field'), '12');
+    expect(_text(tester, 'product-min-condominium-field'), '2,5');
   });
 
   testWidgets('preço zero não é salvo', (tester) async {
@@ -163,12 +247,14 @@ void main() {
     expect(_text(tester, 'product-weight-field'), '0,350');
   });
 
-  testWidgets('disponível em todos marca os condomínios e avisa o backend', (
+  testWidgets('avisa quando o produto não fica à venda em nenhum condomínio', (
     tester,
   ) async {
     final repository = _FakeProdutoRepository();
     await _pump(tester, CadastraProduto(repository: repository));
-    await _fill(tester, preco: '1099');
+    final aviso = find.byKey(const Key('product-no-condominium-warning'));
+    // Abre ligado em todos os condomínios, então não há o que avisar.
+    expect(aviso, findsNothing);
 
     final interruptor = find.byKey(
       const Key('product-all-condominiums-switch'),
@@ -176,6 +262,71 @@ void main() {
     await tester.ensureVisible(interruptor);
     await tester.tap(interruptor);
     await tester.pump();
+    expect(aviso, findsOneWidget);
+
+    final central = find.text('Residencial Central');
+    await tester.ensureVisible(central);
+    await tester.tap(central);
+    await tester.pump();
+    expect(aviso, findsNothing);
+  });
+
+  testWidgets('validação rola até o primeiro campo com erro', (tester) async {
+    await _pump(tester, CadastraProduto(repository: _FakeProdutoRepository()));
+    await _save(tester);
+
+    final erro = find.text('Campo obrigatório').first;
+    final topo = tester.getTopLeft(erro).dy;
+    expect(topo, inInclusiveRange(0, 800));
+  });
+
+  testWidgets('edição mostra o link de estoque e as promoções', (tester) async {
+    await _pump(
+      tester,
+      CadastraProduto(
+        repository: _FakeProdutoRepository(),
+        promocaoRepository: _FakePromocaoRepository(),
+        produto: Produto(
+          id: 'product-1',
+          codigoInterno: 'SKU-1',
+          codigosBarras: const [
+            ProdutoCodigoBarras(codigo: '7894900011517', principal: true),
+          ],
+          nome: 'Produto',
+          preco: DecimalValue.parse('10.99'),
+          unidadeMedida: 'DUZIA',
+          categoria: 'LATICINIOS',
+        ),
+      ),
+    );
+
+    expect(find.byKey(const Key('product-stock-link')), findsOneWidget);
+    expect(find.byKey(const Key('product-promotions-section')), findsOneWidget);
+    expect(find.text('Laticínios'), findsOneWidget);
+    expect(find.text('Dúzia'), findsOneWidget);
+    // Na edição o produto já está no Residencial Central.
+    expect(
+      find.byKey(const Key('product-no-condominium-warning')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('produto novo abre disponível em todos os condomínios', (
+    tester,
+  ) async {
+    final repository = _FakeProdutoRepository();
+    await _pump(tester, CadastraProduto(repository: repository));
+    await _fill(tester, preco: '1099');
+
+    // Produto novo já abre com o interruptor ligado.
+    expect(
+      tester
+          .widget<SwitchListTile>(
+            find.byKey(const Key('product-all-condominiums-switch')),
+          )
+          .value,
+      isTrue,
+    );
     final condominios = tester.widgetList<CheckboxListTile>(
       find.descendant(
         of: find.byKey(const Key('product-availability-section')),

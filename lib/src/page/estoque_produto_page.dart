@@ -117,6 +117,44 @@ class _EstoqueProdutoPageState extends State<EstoqueProdutoPage> {
   String get _unidade =>
       _central?.unidadeMedida ?? _produto?.unidadeMedida ?? '';
 
+  DecimalValue? get _minimoCentral =>
+      _central?.estoqueMinimo ?? _produto?.estoqueMinimoCentral;
+
+  /// "Estoque baixo (mín. X)" quando [saldo] está abaixo de [minimo].
+  String? _baixo(DecimalValue? saldo, DecimalValue? minimo) =>
+      Produto.abaixoDoMinimo(saldo, minimo)
+      ? 'Estoque baixo (mín. ${_qtd(minimo)})'
+      : null;
+
+  Widget _saldo(
+    DecimalValue? saldo,
+    DecimalValue? minimo, {
+    bool semSaldo = false,
+  }) {
+    final theme = Theme.of(context);
+    final baixo = semSaldo && _loading ? null : _baixo(saldo, minimo);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Text(
+          semSaldo ? '—' : _qtd(saldo),
+          style: tabularFigures.copyWith(
+            fontWeight: FontWeight.w600,
+            color: saldo?.isNegative == true ? theme.colorScheme.error : null,
+          ),
+        ),
+        if (baixo != null)
+          Text(
+            baixo,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: appToneColors(context, AppStatusTone.warning).$2,
+            ),
+          ),
+      ],
+    );
+  }
+
   String _qtd(DecimalValue? value) =>
       '${(value ?? DecimalValue.parse('0')).friendly} $_unidade'.trim();
 
@@ -225,14 +263,10 @@ class _EstoqueProdutoPageState extends State<EstoqueProdutoPage> {
                         : (central.localizacao?.isNotEmpty == true
                               ? 'Localização ${central.localizacao}'
                               : 'Sem localização'),
-                    trailing: Text(
-                      central == null ? '—' : _qtd(central.quantidade),
-                      style: tabularFigures.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: central?.quantidade.isNegative == true
-                            ? theme.colorScheme.error
-                            : null,
-                      ),
+                    trailing: _saldo(
+                      central?.quantidade,
+                      _minimoCentral,
+                      semSaldo: central == null,
                     ),
                   ),
                   ..._condominios(muted),
@@ -290,10 +324,7 @@ class _EstoqueProdutoPageState extends State<EstoqueProdutoPage> {
         AppListRow(
           leading: const AppIconWell(Icons.apartment_outlined),
           title: c.condominioNome,
-          trailing: Text(
-            _qtd(c.quantidade),
-            style: tabularFigures.copyWith(fontWeight: FontWeight.w600),
-          ),
+          trailing: _saldo(c.quantidade, _produto?.estoqueMinimoCondominio),
           onTap: _central == null
               ? null
               : () => _abastecer(destino: c.condominioId),

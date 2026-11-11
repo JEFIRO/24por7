@@ -20,19 +20,25 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    // O essencial num bloco só, onde vender logo depois e o opcional recolhido.
     expect(find.byKey(const Key('product-general-section')), findsOneWidget);
-    expect(find.byKey(const Key('product-price-section')), findsOneWidget);
-    expect(find.byKey(const Key('product-barcodes-section')), findsOneWidget);
-    expect(find.byKey(const Key('product-stock-section')), findsOneWidget);
+    expect(find.byKey(const Key('product-price-field')), findsOneWidget);
+    expect(find.byKey(const Key('barcode-field-0')), findsOneWidget);
+    expect(
+      find.byKey(const Key('product-availability-section')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('initial-stock-field')), findsOneWidget);
+    expect(find.byKey(const Key('product-more-section')), findsOneWidget);
     expect(find.byKey(const Key('product-fiscal-section')), findsOneWidget);
-    expect(find.byKey(const Key('product-promotions-section')), findsOneWidget);
+    // Saldo e promoções só aparecem na edição de um produto já cadastrado.
+    expect(find.byKey(const Key('product-stock-section')), findsNothing);
+    expect(find.byKey(const Key('product-promotions-section')), findsNothing);
     expect(find.byKey(const Key('save-product-button')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('cadastro Web põe estoque e disponibilidade no painel lateral', (
-    tester,
-  ) async {
+  testWidgets('cadastro Web põe onde vender no painel lateral', (tester) async {
     await _surface(tester, const Size(1366, 1000));
     await tester.pumpWidget(
       _app(CadastraProduto(repository: _FakeProdutoRepository())),
@@ -43,7 +49,7 @@ void main() {
       find.byKey(const Key('product-general-section')),
     );
     final stock = tester.getTopLeft(
-      find.byKey(const Key('product-stock-section')),
+      find.byKey(const Key('product-availability-section')),
     );
     expect(stock.dx, greaterThan(general.dx));
     expect((stock.dy - general.dy).abs(), lessThan(2));
@@ -145,6 +151,13 @@ void main() {
         300,
         scrollable: find.byType(Scrollable).first,
       );
+      // O cadastro novo abre com "todos os condomínios" ligado; aqui a
+      // escolha é de um condomínio só.
+      final todos = find.byKey(const Key('product-all-condominiums-switch'));
+      await tester.ensureVisible(todos);
+      await tester.tap(todos);
+      await tester.pump();
+      await tester.ensureVisible(find.text('Residencial Central'));
       await tester.tap(find.text('Residencial Central'));
       await tester.tap(find.byKey(const Key('save-product-button')));
       await tester.pumpAndSettle();
