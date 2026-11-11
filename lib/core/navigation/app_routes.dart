@@ -7,6 +7,8 @@ import '../widgets/brand_logo.dart';
 import '../../src/page/home_page.dart';
 import '../../src/page/login_page.dart';
 import '../../src/page/onboarding_page.dart';
+import '../../src/page/welcome_page.dart';
+import 'welcome_state.dart';
 import '../../src/page/cadastra_produto.dart';
 import '../../src/page/terminal_telemetry_detail_page.dart';
 import '../../src/model/produto_repository.dart';
@@ -14,6 +16,7 @@ import '../../src/model/produto_repository.dart';
 final appNavigatorKey = GlobalKey<NavigatorState>();
 
 abstract final class AppRoutes {
+  static const welcome = '/boas-vindas';
   static const login = '/login';
   static const onboarding = '/onboarding';
   static const dashboard = '/dashboard';
@@ -55,6 +58,15 @@ abstract final class AppRoutes {
       return MaterialPageRoute<void>(
         settings: settings,
         builder: (_) => const OnboardingPage(),
+      );
+    }
+    // Primeira abertura, antes de qualquer login: boas-vindas.
+    if (!ApiClient.instance.isAuthenticated &&
+        WelcomeState.pending &&
+        route != login) {
+      return MaterialPageRoute<void>(
+        settings: const RouteSettings(name: welcome),
+        builder: (_) => const WelcomePage(),
       );
     }
     if (route == login || !ApiClient.instance.isAuthenticated) {

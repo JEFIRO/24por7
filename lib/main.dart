@@ -1,4 +1,5 @@
 import 'package:app_24por7/core/navigation/app_routes.dart';
+import 'package:app_24por7/core/navigation/welcome_state.dart';
 import 'package:app_24por7/core/theme/app_motion.dart';
 import 'package:app_24por7/core/theme/app_theme.dart';
 import 'package:app_24por7/core/theme/branding_config.dart';
@@ -20,6 +21,9 @@ Future<void> main() async {
   tz.initializeTimeZones();
   await initializeDateFormatting('pt_BR');
   await ApiClient.instance.restoreSession();
+  await WelcomeState.load();
+  // Quem já usa o painel não precisa de boas-vindas ao sair e voltar.
+  if (ApiClient.instance.isAuthenticated) await WelcomeState.markSeen();
   // Não bloqueia a abertura: o tema atualiza quando o branding chegar.
   loadBranding();
   ApiClient.instance.onUnauthorized = () {

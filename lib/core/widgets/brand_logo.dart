@@ -16,6 +16,7 @@ class BrandLogo extends StatefulWidget {
     this.cycles,
     this.turnDuration = AppMotion.brandCycle,
     this.showWordmark = false,
+    this.onDark = false,
     super.key,
   }) : center = null,
        ringOpacity = 1;
@@ -31,7 +32,8 @@ class BrandLogo extends StatefulWidget {
     this.ringOpacity = .45,
     super.key,
   }) : center = child,
-       showWordmark = false;
+       showWordmark = false,
+       onDark = false;
 
   /// Largura e altura do símbolo. A palavra "Painel" fica abaixo, fora dela.
   final double size;
@@ -49,6 +51,9 @@ class BrandLogo extends StatefulWidget {
 
   final Widget? center;
   final double ringOpacity;
+
+  /// Versão para fundo escuro: o azul do logo vira branco; o laranja fica.
+  final bool onDark;
 
   @override
   State<BrandLogo> createState() => _BrandLogoState();
@@ -113,7 +118,11 @@ class _BrandLogoState extends State<BrandLogo>
     final mark = RepaintBoundary(
       child: CustomPaint(
         size: Size.square(widget.size),
-        painter: _BrandLogoPainter(_turns, digits: widget.center == null),
+        painter: _BrandLogoPainter(
+          _turns,
+          digits: widget.center == null,
+          onDark: widget.onDark,
+        ),
       ),
     );
     if (widget.center != null) {
@@ -137,7 +146,9 @@ class _BrandLogoState extends State<BrandLogo>
                 Text(
                   'Painel',
                   style: TextStyle(
-                    color: AppBrand.blue,
+                    color: widget.onDark
+                        ? const Color(0xFFFFFFFF)
+                        : AppBrand.blue,
                     fontSize: widget.size * .2,
                     height: 1.1,
                     fontWeight: FontWeight.w800,
@@ -168,7 +179,18 @@ class BrandLoader extends StatelessWidget {
 enum _Taper { both, tail }
 
 class _BrandLogoPainter extends CustomPainter {
-  _BrandLogoPainter(this.cycle, {this.digits = true}) : super(repaint: cycle);
+  _BrandLogoPainter(this.cycle, {this.digits = true, this.onDark = false})
+    : super(repaint: cycle);
+
+  final bool onDark;
+
+  static const _white = Color(0xFFFFFFFF);
+  static const _lightSweep = [Color(0x66FFFFFF), Color(0xFFCFE3FF), _white];
+  static const _lightGradient = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [_white, Color(0xFFCFE3FF)],
+  );
 
   /// Desenha o "24/7"; sem ele, sobra só o ciclo de setas.
   final bool digits;
@@ -201,7 +223,7 @@ class _BrandLogoPainter extends CustomPainter {
       start: _rad(100) + phase,
       sweep: _rad(78),
       width: 7,
-      colors: AppBrand.blueSweep,
+      colors: onDark ? _lightSweep : AppBrand.blueSweep,
       radius: .9,
     );
     _swoosh(
@@ -217,7 +239,7 @@ class _BrandLogoPainter extends CustomPainter {
       start: _rad(170) + phase,
       sweep: _rad(138),
       width: 13,
-      colors: AppBrand.blueSweep,
+      colors: onDark ? _lightSweep : AppBrand.blueSweep,
       peak: .55,
     );
     _swoosh(
@@ -392,14 +414,17 @@ class _BrandLogoPainter extends CustomPainter {
         canvas.translate(-width / 2, -50);
       }
       const bounds = Rect.fromLTWH(0, 0, 100, 100);
-      canvas.drawPath(
-        path,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = slash ? 5 : 9
-          ..strokeJoin = StrokeJoin.round
-          ..color = seven ? AppBrand.red : AppBrand.navy,
-      );
+      // Em fundo escuro o contorno navy sumiria; só o "7" mantém o seu.
+      if (!onDark || seven) {
+        canvas.drawPath(
+          path,
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = slash ? 5 : 9
+            ..strokeJoin = StrokeJoin.round
+            ..color = seven ? AppBrand.red : AppBrand.navy,
+        );
+      }
       canvas.drawPath(
         path,
         Paint()
@@ -412,6 +437,8 @@ class _BrandLogoPainter extends CustomPainter {
                         )
                       : seven
                       ? AppBrand.orangeGradient
+                      : onDark
+                      ? _lightGradient
                       : AppBrand.blueGradient)
                   .createShader(bounds),
       );
@@ -422,5 +449,5 @@ class _BrandLogoPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_BrandLogoPainter oldDelegate) =>
-      oldDelegate.digits != digits;
+      oldDelegate.digits != digits || oldDelegate.onDark != onDark;
 }
