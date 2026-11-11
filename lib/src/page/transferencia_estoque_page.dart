@@ -11,9 +11,12 @@ import '../model/estoque.dart';
 import '../model/estoque_repository.dart';
 import '../model/produto_repository.dart';
 
+/// Lista de transferências do central para os Condomínios. É uma aba da tela
+/// de Estoque.
 class TransferenciaEstoquePage extends StatefulWidget {
-  const TransferenciaEstoquePage({super.key, this.repository});
+  const TransferenciaEstoquePage({super.key, this.repository, this.header});
   final EstoqueRepository? repository;
+  final Widget? header;
   @override
   State<TransferenciaEstoquePage> createState() =>
       _TransferenciaEstoquePageState();
@@ -56,75 +59,56 @@ class _TransferenciaEstoquePageState extends State<TransferenciaEstoquePage> {
   @override
   Widget build(BuildContext context) {
     final mobile = AppBreakpoints.isMobile(context);
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Transferências'),
-        actions: [
-          IconButton(
-            tooltip: 'Atualizar',
-            onPressed: load,
-            icon: const Icon(Icons.refresh),
-          ),
-          if (!mobile)
-            Padding(
-              padding: const EdgeInsets.only(
-                left: AppSpacing.sm,
-                right: AppSpacing.lg,
-              ),
-              child: FilledButton.icon(
-                onPressed: _new,
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('Nova transferência'),
-              ),
-            ),
-        ],
-      ),
-      floatingActionButton: mobile
-          ? FloatingActionButton.extended(
-              onPressed: _new,
-              icon: const Icon(Icons.add),
-              label: const Text('Nova transferência'),
-            )
-          : null,
-      body: FutureBuilder<List<TransferenciaEstoque>>(
-        future: future,
-        builder: (context, s) {
-          if (s.connectionState != ConnectionState.done) {
-            return const AppLoadingState(label: 'Carregando transferências…');
-          }
-          if (s.hasError) {
-            return AppErrorState(message: s.error.toString(), onRetry: load);
-          }
-          final all = s.data ?? const <TransferenciaEstoque>[];
-          final items = _status == null
-              ? all
-              : all.where((t) => t.status == _status).toList();
-          return ListView(
-            children: [
-              AppContent(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+    return RefreshIndicator(
+      onRefresh: () async {
+        load();
+        await future.catchError((_) => const <TransferenciaEstoque>[]);
+      },
+      child: ListView(
+        children: [
+          AppContent(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ?widget.header,
+                Wrap(
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.sm,
                   children: [
-                    Wrap(
-                      spacing: AppSpacing.sm,
-                      runSpacing: AppSpacing.sm,
-                      children: [
-                        for (final (value, label) in const [
-                          (null, 'Todas'),
-                          ('RASCUNHO', 'Rascunho'),
-                          ('CONFIRMADA', 'Confirmadas'),
-                          ('CANCELADA', 'Canceladas'),
-                        ])
-                          ChoiceChip(
-                            label: Text(label),
-                            selected: _status == value,
-                            onSelected: (_) => setState(() => _status = value),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                    if (items.isEmpty)
-                      AppEmptyState(
+                    for (final (value, label) in const [
+                      (null, 'Todas'),
+                      ('RASCUNHO', 'Rascunho'),
+                      ('CONFIRMADA', 'Confirmadas'),
+                      ('CANCELADA', 'Canceladas'),
+                    ])
+                      ChoiceChip(
+                        label: Text(label),
+                        selected: _status == value,
+                        onSelected: (_) => setState(() => _status = value),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                FutureBuilder<List<TransferenciaEstoque>>(
+                  future: future,
+                  builder: (context, s) {
+                    if (s.connectionState != ConnectionState.done) {
+                      return const AppLoadingState(
+                        label: 'Carregando transferências…',
+                      );
+                    }
+                    if (s.hasError) {
+                      return AppErrorState(
+                        message: s.error.toString(),
+                        onRetry: load,
+                      );
+                    }
+                    final all = s.data ?? const <TransferenciaEstoque>[];
+                    final items = _status == null
+                        ? all
+                        : all.where((t) => t.status == _status).toList();
+                    if (items.isEmpty) {
+                      return AppEmptyState(
                         icon: Icons.local_shipping_outlined,
                         title: 'Nenhuma transferência registrada',
                         message:
@@ -133,86 +117,87 @@ class _TransferenciaEstoquePageState extends State<TransferenciaEstoquePage> {
                           onPressed: _new,
                           child: const Text('Nova transferência'),
                         ),
-                      )
-                    else if (mobile)
-                      for (final t in items)
-                        AppListRow(
-                          title: transferCode(t.id),
-                          meta:
-                              'Para ${t.destinoNome} · ${_itemCount(t.itens.length)}\n${_date(t.createdAt)}',
-                          trailing: transferStatusBadge(t.status),
-                          onTap: () => _open(t),
-                        )
-                    else
-                      AppTable(
-                        columns: const [
-                          DataColumn(label: Text('Transferência')),
-                          DataColumn(label: Text('Destino')),
-                          DataColumn(label: Text('Itens'), numeric: true),
-                          DataColumn(label: Text('Responsável')),
-                          DataColumn(label: Text('Data')),
-                          DataColumn(label: Text('Status')),
-                        ],
-                        rows: [
+                      );
+                    }
+                    if (mobile) {
+                      return Column(
+                        children: [
                           for (final t in items)
-                            DataRow(
-                              onSelectChanged: (_) => _open(t),
-                              cells: [
-                                DataCell(
-                                  Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        transferCode(t.id),
-                                        style: Theme.of(
-                                          context,
-                                        ).textTheme.titleSmall,
-                                      ),
-                                      if (t.observacao?.isNotEmpty == true)
-                                        Text(
-                                          t.observacao!,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodySmall
-                                              ?.copyWith(
-                                                color: Theme.of(
-                                                  context,
-                                                ).colorScheme.onSurfaceVariant,
-                                              ),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                                DataCell(Text(t.destinoNome)),
-                                DataCell(
-                                  Text(
-                                    '${t.itens.length}',
-                                    style: tabularFigures,
-                                  ),
-                                ),
-                                DataCell(Text(t.responsavel ?? 'Sistema')),
-                                DataCell(
-                                  Text(
-                                    _date(t.createdAt),
-                                    style: tabularFigures,
-                                  ),
-                                ),
-                                DataCell(transferStatusBadge(t.status)),
-                              ],
+                            AppListRow(
+                              title: transferCode(t.id),
+                              meta:
+                                  'Para ${t.destinoNome} · ${_itemCount(t.itens.length)}\n${_date(t.createdAt)}',
+                              trailing: transferStatusBadge(t.status),
+                              onTap: () => _open(t),
                             ),
                         ],
-                      ),
-                    const SizedBox(height: 88),
-                  ],
+                      );
+                    }
+                    return AppTable(
+                      columns: const [
+                        DataColumn(label: Text('Transferência')),
+                        DataColumn(label: Text('Destino')),
+                        DataColumn(label: Text('Itens'), numeric: true),
+                        DataColumn(label: Text('Responsável')),
+                        DataColumn(label: Text('Data')),
+                        DataColumn(label: Text('Status')),
+                      ],
+                      rows: [
+                        for (final t in items)
+                          DataRow(
+                            onSelectChanged: (_) => _open(t),
+                            cells: [
+                              DataCell(
+                                Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      transferCode(t.id),
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.titleSmall,
+                                    ),
+                                    if (t.observacao?.isNotEmpty == true)
+                                      Text(
+                                        t.observacao!,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(
+                                              color: Theme.of(
+                                                context,
+                                              ).colorScheme.onSurfaceVariant,
+                                            ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              DataCell(Text(t.destinoNome)),
+                              DataCell(
+                                Text(
+                                  '${t.itens.length}',
+                                  style: tabularFigures,
+                                ),
+                              ),
+                              DataCell(Text(t.responsavel ?? 'Sistema')),
+                              DataCell(
+                                Text(_date(t.createdAt), style: tabularFigures),
+                              ),
+                              DataCell(transferStatusBadge(t.status)),
+                            ],
+                          ),
+                      ],
+                    );
+                  },
                 ),
-              ),
-            ],
-          );
-        },
+                const SizedBox(height: 88),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -235,8 +220,19 @@ AppStatusBadge transferStatusBadge(String status) => switch (status) {
 };
 
 class TransferenciaFormPage extends StatefulWidget {
-  const TransferenciaFormPage({super.key, required this.repository});
+  const TransferenciaFormPage({
+    super.key,
+    required this.repository,
+    this.destinoInicial,
+    this.itemInicial,
+  });
   final EstoqueRepository repository;
+
+  /// Condomínio já escolhido por quem abriu o formulário.
+  final String? destinoInicial;
+
+  /// Produto que já entra na lista de itens.
+  final EstoqueCentral? itemInicial;
   @override
   State<TransferenciaFormPage> createState() => _TransferenciaFormPageState();
 }
@@ -259,6 +255,8 @@ class _TransferenciaFormPageState extends State<TransferenciaFormPage> {
   @override
   void initState() {
     super.initState();
+    final item = widget.itemInicial;
+    if (item != null) selected[item.produtoId] = _ItemSelecionado(item);
     load();
   }
 
@@ -274,7 +272,10 @@ class _TransferenciaFormPageState extends State<TransferenciaFormPage> {
   Future<void> load() async {
     try {
       condos = await widget.repository.condominios();
-      destino = condos.isEmpty ? null : condos.first.id;
+      final inicial = widget.destinoInicial;
+      destino = condos.any((c) => c.id == inicial)
+          ? inicial
+          : (condos.isEmpty ? null : condos.first.id);
     } catch (e) {
       error = e.toString();
     } finally {
@@ -662,7 +663,7 @@ class _QuantidadeStepper extends StatelessWidget {
     final theme = Theme.of(context);
     final atual = _atual;
     final border = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(AppRadius.sm),
       borderSide: BorderSide(
         color: hasError ? theme.colorScheme.error : theme.colorScheme.outline,
       ),

@@ -54,6 +54,33 @@ class EstoqueRepository {
     }
   }
 
+  /// Saldo central de um produto, ou null se ele nunca entrou no central.
+  /// [busca] (SKU ou nome) restringe a consulta; a API não busca por id.
+  Future<EstoqueCentral?> centralDoProduto(
+    String produtoId, {
+    required String busca,
+  }) async {
+    final result = await listarCentralPagina(size: 50, busca: busca);
+    for (final item in result.items) {
+      if (item.produtoId == produtoId) return item;
+    }
+    return null;
+  }
+
+  /// Saldo do produto em cada Condomínio da Empresa.
+  Future<List<ProdutoCondominioDisponibilidade>> saldosNosCondominios(
+    String produtoId,
+  ) async =>
+      ((await client.get('/produtos/$produtoId/disponibilidade-condominios'))
+              as List)
+          .whereType<Map>()
+          .map(
+            (e) => ProdutoCondominioDisponibilidade.fromJson(
+              Map<String, dynamic>.from(e),
+            ),
+          )
+          .toList();
+
   Future<List<Produto>> listarProdutos() async {
     final items = <Produto>[];
     for (var page = 0; ; page++) {
@@ -91,10 +118,44 @@ class EstoqueRepository {
     return EstoqueCentral.fromJson(Map<String, dynamic>.from(data as Map));
   }
 
-  Future<List<MovimentoEstoque>> movimentos() async =>
-      ((await client.get('/estoque-empresa/movimentacoes')) as List)
+  Future<Map<String, Produto>>? _catalogo;
+
+  /// Produtos por id, para completar respostas que só trazem o id (nome, SKU,
+  /// categoria, unidade). Fica guardado enquanto o repositório viver; devolve
+  /// vazio se a consulta falhar, porque é só um complemento da tela.
+  Future<Map<String, Produto>> catalogo() async {
+    try {
+      return await (_catalogo ??= listarProdutos().then(
+        (list) => {
+          for (final p in list)
+            if (p.id != null) p.id!: p,
+        },
+      ));
+    } catch (_) {
+      _catalogo = null;
+      return const {};
+    }
+  }
+
+  void invalidarCatalogo() => _catalogo = null;
+
+  /// Trilha do estoque central ou, com [condominioId], do mercado.
+  Future<List<MovimentoEstoque>> movimentos({String? condominioId}) async =>
+      ((await client.get(
+                condominioId == null
+                    ? '/estoque-empresa/movimentacoes'
+                    : '/condominios/$condominioId/estoque/movimentacoes',
+              ))
+              as List)
           .whereType<Map>()
           .map((e) => MovimentoEstoque.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+
+  /// Saldo de cada produto no mercado do Condomínio.
+  Future<List<Map<String, dynamic>>> estoqueCondominio(String id) async =>
+      ((await client.get('/condominios/$id/estoque')) as List)
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
           .toList();
 
   Future<List<CondominioOption>> condominios() async =>

@@ -2,6 +2,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/formatters/decimal_input_formatter.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/widgets/app_content.dart';
 import '../../core/widgets/status_badge.dart';
@@ -39,6 +40,9 @@ class _CadastraProdutoState extends State<CadastraProduto> {
   final _preco = TextEditingController();
   final _peso = TextEditingController();
   final _tolerancia = TextEditingController();
+  // Preço em centavos (2 casas) e peso em gramas (3 casas).
+  final _precoFormatter = DecimalInputFormatter(decimalDigits: 2);
+  final _pesoFormatter = DecimalInputFormatter(decimalDigits: 3);
   final _estoqueInicial = TextEditingController();
   final _motivoEstoque = TextEditingController(text: 'Carga inicial');
   final _ncm = TextEditingController();
@@ -56,6 +60,8 @@ class _CadastraProdutoState extends State<CadastraProduto> {
   bool _ativo = true;
   bool _saving = false;
   bool _loadingCondominios = true;
+  bool _todosCondominios = false;
+  bool _todosCondominiosOriginal = false;
   bool _loadingPromocoes = false;
   bool _estoqueRegistrado = false;
   String? _condominiosError;
@@ -126,9 +132,15 @@ class _CadastraProdutoState extends State<CadastraProduto> {
       _sku.text = product.codigoInterno;
       _nome.text = product.nome;
       _descricao.text = product.descricao ?? '';
-      _preco.text = product.preco.friendly;
-      _peso.text = product.peso?.friendly ?? '';
-      _tolerancia.text = product.pesoTolerancia?.friendly ?? '';
+      _preco.text = _precoFormatter.format(_toUnits(product.preco, 2));
+      final peso = product.peso;
+      if (peso != null) _peso.text = _pesoFormatter.format(_toUnits(peso, 3));
+      final tolerancia = product.pesoTolerancia;
+      if (tolerancia != null) {
+        _tolerancia.text = _pesoFormatter.format(_toUnits(tolerancia, 3));
+      }
+      _todosCondominios = product.disponivelTodosCondominios;
+      _todosCondominiosOriginal = product.disponivelTodosCondominios;
       _categoria = product.categoria;
       _unidade = product.unidadeMedida;
       _ativo = product.ativo;
@@ -256,18 +268,34 @@ class _CadastraProdutoState extends State<CadastraProduto> {
     }
   }
 
-  String? _nonNegativeDecimal(String? value, {bool optional = true}) {
+  /// Valor do campo mascarado: obrigatório e maior que zero, ou opcional.
+  String? _maskedPositive(String? value, {bool optional = false}) {
     if (value == null || value.trim().isEmpty) {
       return optional ? null : 'Campo obrigatório';
     }
-    try {
-      return DecimalValue.parse(value).isNegative
-          ? 'Não pode ser negativo'
-          : null;
-    } on FormatException catch (error) {
-      return error.message;
-    }
+    return DecimalInputFormatter.parse(value) > 0
+        ? null
+        : 'Informe um valor maior que zero';
   }
+
+  /// Inteiro na menor unidade ([digits] casas) a partir do decimal do model.
+  /// Casas além de [digits] são descartadas.
+  static int _toUnits(DecimalValue value, int digits) =>
+      (value.scaledInteger ~/ BigInt.from(10).pow(6 - digits)).toInt();
+
+  /// Decimal do model a partir do inteiro digitado no campo mascarado.
+  static DecimalValue _fromUnits(int units, int digits) {
+    final text = units.toString().padLeft(digits + 1, '0');
+    final cut = text.length - digits;
+    return DecimalValue.parse(
+      '${text.substring(0, cut)}.${text.substring(cut)}',
+    );
+  }
+
+  DecimalValue? _maskedOrNull(TextEditingController controller, int digits) =>
+      controller.text.trim().isEmpty
+      ? null
+      : _fromUnits(DecimalInputFormatter.parse(controller.text), digits);
 
   DecimalValue? _optionalDecimal(TextEditingController controller) =>
       controller.text.trim().isEmpty
@@ -309,11 +337,11 @@ class _CadastraProdutoState extends State<CadastraProduto> {
       codigosBarras: codes,
       nome: _nome.text.trim(),
       descricao: _textOrNull(_descricao),
-      preco: DecimalValue.parse(_preco.text),
+      preco: _fromUnits(DecimalInputFormatter.parse(_preco.text), 2),
       unidadeMedida: _unidade,
       categoria: _categoria,
-      peso: _optionalDecimal(_peso),
-      pesoTolerancia: _optionalDecimal(_tolerancia),
+      peso: _maskedOrNull(_peso, 3),
+      pesoTolerancia: _maskedOrNull(_tolerancia, 3),
       ativo: _ativo,
       fiscal: fiscal.isEmpty ? null : fiscal,
       foto: widget.produto?.foto,
@@ -347,7 +375,7 @@ class _CadastraProdutoState extends State<CadastraProduto> {
         );
         _estoqueRegistrado = true;
       }
-      await _syncAssociations(saved.id!);
+      await _syncAvailability(saved.id!);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -379,6 +407,25 @@ class _CadastraProdutoState extends State<CadastraProduto> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  Future<void> _syncAvailability(String produtoId) async {
+    if (_todosCondominios != _todosCondominiosOriginal) {
+      await _repository.definirDisponivelEmTodos(
+        produtoId: produtoId,
+        ativo: _todosCondominios,
+      );
+      _todosCondominiosOriginal = _todosCondominios;
+    }
+    if (_todosCondominios) {
+      // O backend já associou todos os Condomínios.
+      for (final item in _condominios) {
+        _associacoes[item.condominioId] = true;
+        _associacoesOriginais[item.condominioId] = true;
+      }
+      return;
+    }
+    await _syncAssociations(produtoId);
   }
 
   Future<void> _syncAssociations(String produtoId) async {
@@ -631,25 +678,26 @@ class _CadastraProdutoState extends State<CadastraProduto> {
         _ResponsiveFields(
           children: [
             TextFormField(
+              key: const Key('product-weight-field'),
               controller: _peso,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
+              keyboardType: TextInputType.number,
+              inputFormatters: [_pesoFormatter],
               decoration: const InputDecoration(
                 labelText: 'Peso',
+                hintText: '0,000',
                 suffixText: 'kg',
               ),
-              validator: (value) => _positiveDecimal(value, optional: true),
+              validator: (value) => _maskedPositive(value, optional: true),
             ),
             TextFormField(
               controller: _tolerancia,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
+              keyboardType: TextInputType.number,
+              inputFormatters: [_pesoFormatter],
               decoration: const InputDecoration(
                 labelText: 'Tolerância de peso',
+                hintText: '0,000',
+                suffixText: 'kg',
               ),
-              validator: _nonNegativeDecimal,
             ),
           ],
         ),
@@ -690,14 +738,14 @@ class _CadastraProdutoState extends State<CadastraProduto> {
         TextFormField(
           key: const Key('product-price-field'),
           controller: _preco,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          keyboardType: TextInputType.number,
+          inputFormatters: [_precoFormatter],
           decoration: const InputDecoration(
             labelText: 'Preço de venda',
             prefixText: 'R\$ ',
-            hintText: '10,99',
-            helperText: 'Aceita até 6 casas decimais',
+            hintText: '0,00',
           ),
-          validator: _positiveDecimal,
+          validator: _maskedPositive,
         ),
         const SizedBox(height: AppSpacing.lg),
         Text(
@@ -834,18 +882,32 @@ class _CadastraProdutoState extends State<CadastraProduto> {
           )
         : Column(
             children: [
+              SwitchListTile.adaptive(
+                key: const Key('product-all-condominiums-switch'),
+                contentPadding: EdgeInsets.zero,
+                value: _todosCondominios,
+                title: const Text('Disponível em todos os condomínios'),
+                subtitle: const Text(
+                  'Inclui os condomínios cadastrados depois.',
+                ),
+                onChanged: _saving
+                    ? null
+                    : (value) => setState(() => _todosCondominios = value),
+              ),
+              const Divider(height: 1),
               for (var index = 0; index < _condominios.length; index++) ...[
                 CheckboxListTile(
                   contentPadding: EdgeInsets.zero,
                   value:
-                      _associacoes[_condominios[index].condominioId] ?? false,
+                      _todosCondominios ||
+                      (_associacoes[_condominios[index].condominioId] ?? false),
                   title: Text(_condominios[index].condominioNome),
                   subtitle: _condominios[index].quantidade == null
                       ? null
                       : Text(
                           'Saldo local: ${_condominios[index].quantidade!.friendly}',
                         ),
-                  onChanged: _saving
+                  onChanged: _saving || _todosCondominios
                       ? null
                       : (value) => setState(() {
                           _associacoes[_condominios[index].condominioId] =

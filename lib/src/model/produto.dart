@@ -97,6 +97,10 @@ class Produto {
   final DecimalValue? peso;
   final DecimalValue? pesoTolerancia;
   final bool ativo;
+
+  /// Disponível em todos os Condomínios, inclusive nos criados depois. Só
+  /// leitura aqui: muda por [ProdutoRepository.definirDisponivelEmTodos].
+  final bool disponivelTodosCondominios;
   final ProdutoFiscal? fiscal;
 
   const Produto({
@@ -112,6 +116,7 @@ class Produto {
     this.peso,
     this.pesoTolerancia,
     this.ativo = true,
+    this.disponivelTodosCondominios = false,
     this.fiscal,
   });
 
@@ -156,6 +161,7 @@ class Produto {
           ? null
           : DecimalValue.fromJson(json['pesoTolerancia']),
       ativo: json['ativo'] ?? json['status'] ?? true,
+      disponivelTodosCondominios: json['disponivelTodosCondominios'] == true,
       fiscal: json['fiscal'] is Map
           ? ProdutoFiscal.fromJson(Map<String, dynamic>.from(json['fiscal']))
           : null,

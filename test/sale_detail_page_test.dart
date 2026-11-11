@@ -41,6 +41,16 @@ void main() {
       expect(find.text('Coca-Cola 350ml'), findsOneWidget);
       expect(find.text('Enviar comprovante'), findsOneWidget);
       expect(find.text('Solicitar reembolso'), findsOneWidget);
+
+      // Diálogo do comprovante: só WhatsApp e sem overflow com o teclado aberto.
+      tester.view.physicalSize = const Size(360, 560);
+      tester.view.viewInsets = const FakeViewPadding(bottom: 380);
+      addTearDown(tester.view.resetViewInsets);
+      await tester.tap(find.text('Enviar comprovante'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.text('WhatsApp com DDD'), findsOneWidget);
+      expect(find.text('E-mail'), findsNothing);
     });
   }
 }

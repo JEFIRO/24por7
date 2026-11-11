@@ -47,6 +47,7 @@ class EstoqueCentral {
 class MovimentoEstoque {
   final String id;
   final String localTipo;
+  final String? localId;
   final String produtoId;
   final String tipo;
   final DecimalValue quantidade;
@@ -60,6 +61,7 @@ class MovimentoEstoque {
   const MovimentoEstoque({
     required this.id,
     required this.localTipo,
+    this.localId,
     required this.produtoId,
     required this.tipo,
     required this.quantidade,
@@ -75,6 +77,7 @@ class MovimentoEstoque {
       MovimentoEstoque(
         id: json['id'].toString(),
         localTipo: json['localTipo']?.toString() ?? '',
+        localId: json['localId']?.toString(),
         produtoId: json['produtoId'].toString(),
         tipo: json['tipo'].toString(),
         quantidade: DecimalValue.fromJson(json['quantidade']),

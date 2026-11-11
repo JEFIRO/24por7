@@ -49,16 +49,14 @@ Future<void> _pump(WidgetTester tester, EstoqueRepository repository) async {
   await tester.pumpWidget(
     MaterialApp(
       theme: AppTheme.light(BrandingConfig.fallback),
-      home: EstoqueCentralPage(repository: repository),
+      home: Scaffold(body: EstoqueCentralPage(repository: repository)),
     ),
   );
   await tester.pumpAndSettle();
 }
 
 void main() {
-  testWidgets('carrega as próximas páginas ao rolar até o fim', (
-    tester,
-  ) async {
+  testWidgets('carrega as próximas páginas ao rolar até o fim', (tester) async {
     final repository = _FakeEstoqueRepository([
       for (var i = 0; i < 120; i++) _item(i),
     ]);
@@ -92,8 +90,10 @@ void main() {
 
     await tester.tap(find.textContaining('Refrigerante Pepsi Black'));
     await tester.pumpAndSettle();
+    await tester.tap(find.text('Corrigir saldo'));
+    await tester.pumpAndSettle();
 
-    expect(find.text('Movimentar estoque central'), findsOneWidget);
+    expect(find.text('Corrigir saldo do central'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -102,6 +102,8 @@ void main() {
     await _pump(tester, repository);
 
     await tester.tap(find.text('Produto 000'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Corrigir saldo'));
     await tester.pumpAndSettle();
 
     final campo = find.widgetWithText(TextField, 'Quantidade');

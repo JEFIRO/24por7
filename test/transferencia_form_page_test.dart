@@ -90,13 +90,15 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Pepsi Black Lata 350ml'), findsOneWidget);
-    await tester.enterText(find.widgetWithText(TextField, 'Qtd.'), '8');
+    // O campo de quantidade do item vem antes do campo de observação.
+    final quantidade = find.byType(TextField).first;
+    await tester.enterText(quantidade, '8');
     await tester.pump();
-    expect(find.text('Só há 5'), findsOneWidget);
+    expect(find.text('Só há 5 UN disponível'), findsOneWidget);
 
-    await tester.enterText(find.widgetWithText(TextField, 'Qtd.'), '3');
+    await tester.enterText(quantidade, '3');
     await tester.pump();
-    expect(find.text('Só há 5'), findsNothing);
+    expect(find.text('Só há 5 UN disponível'), findsNothing);
     expect(find.text('Revisar e confirmar (1 item)'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

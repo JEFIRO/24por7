@@ -92,21 +92,21 @@ class _AdminSaleDetailPageState extends State<AdminSaleDetailPage> {
   }
 
   Future<void> _sendReceipt() async {
-    final request = await showDialog<(ReceiptChannel, String)>(
+    final phone = await showDialog<String>(
       context: context,
       builder: (_) => const _SendReceiptDialog(),
     );
-    if (request == null || !mounted) return;
+    if (phone == null || !mounted) return;
     setState(() => _working = true);
     try {
       final duplicate = await _repository.sendReceipt(
         widget.orderId,
-        channel: request.$1,
-        destination: request.$2,
+        channel: ReceiptChannel.whatsapp,
+        destination: phone,
       );
       _snack(
         duplicate
-            ? 'Este comprovante já tinha sido enviado para esse destino.'
+            ? 'Este comprovante já tinha sido enviado para esse número.'
             : 'Comprovante enviado.',
       );
     } catch (error) {
@@ -487,24 +487,17 @@ class _SendReceiptDialog extends StatefulWidget {
 
 class _SendReceiptDialogState extends State<_SendReceiptDialog> {
   final _form = GlobalKey<FormState>();
-  final _destination = TextEditingController();
-  ReceiptChannel _channel = ReceiptChannel.whatsapp;
+  final _phone = TextEditingController();
 
   @override
   void dispose() {
-    _destination.dispose();
+    _phone.dispose();
     super.dispose();
   }
 
   String? _validate(String? value) {
-    final text = value?.trim() ?? '';
-    if (text.isEmpty) return 'Informe o destinatário';
-    if (_channel == ReceiptChannel.email) {
-      return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(text)
-          ? null
-          : 'E-mail inválido';
-    }
-    final digits = text.replaceAll(RegExp(r'\D'), '');
+    final digits = (value ?? '').replaceAll(RegExp(r'\D'), '');
+    if (digits.isEmpty) return 'Informe o telefone';
     return digits.length >= 10 && digits.length <= 13
         ? null
         : 'Informe DDD e número';
@@ -512,13 +505,14 @@ class _SendReceiptDialogState extends State<_SendReceiptDialog> {
 
   void _submit() {
     if (!_form.currentState!.validate()) return;
-    Navigator.pop(context, (_channel, _destination.text.trim()));
+    Navigator.pop(context, _phone.text.trim());
   }
 
   @override
   Widget build(BuildContext context) {
-    final whatsapp = _channel == ReceiptChannel.whatsapp;
     return AlertDialog(
+      // Rola o conteúdo quando o teclado reduz o espaço disponível.
+      scrollable: true,
       title: const Text('Enviar comprovante'),
       content: Form(
         key: _form,
@@ -526,36 +520,20 @@ class _SendReceiptDialogState extends State<_SendReceiptDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            SegmentedButton<ReceiptChannel>(
-              segments: const [
-                ButtonSegment(
-                  value: ReceiptChannel.whatsapp,
-                  label: Text('WhatsApp'),
-                  icon: Icon(Icons.chat_outlined),
-                ),
-                ButtonSegment(
-                  value: ReceiptChannel.email,
-                  label: Text('E-mail'),
-                  icon: Icon(Icons.mail_outline),
-                ),
-              ],
-              selected: {_channel},
-              onSelectionChanged: (value) => setState(() {
-                _channel = value.first;
-                _destination.clear();
-              }),
+            Text(
+              'O comprovante será enviado por WhatsApp.',
+              style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: AppSpacing.lg),
             TextFormField(
-              key: ValueKey(_channel),
-              controller: _destination,
+              controller: _phone,
               autofocus: true,
-              keyboardType: whatsapp
-                  ? TextInputType.phone
-                  : TextInputType.emailAddress,
-              decoration: InputDecoration(
-                labelText: whatsapp ? 'Telefone com DDD' : 'E-mail',
-                hintText: whatsapp ? '(11) 98765-4321' : 'cliente@email.com',
+              keyboardType: TextInputType.phone,
+              textInputAction: TextInputAction.send,
+              decoration: const InputDecoration(
+                labelText: 'WhatsApp com DDD',
+                hintText: '(11) 98765-4321',
+                prefixIcon: Icon(Icons.chat_outlined),
               ),
               validator: _validate,
               onFieldSubmitted: (_) => _submit(),

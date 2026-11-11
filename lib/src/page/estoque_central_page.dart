@@ -8,12 +8,14 @@ import '../model/produto.dart';
 import '../model/decimal_value.dart';
 import '../model/estoque.dart';
 import '../model/estoque_repository.dart';
-import 'inventario_list_page.dart';
-import 'transferencia_estoque_page.dart';
+import 'estoque_produto_page.dart';
 
+/// Saldos do estoque central. É uma aba da tela de Estoque: não tem Scaffold
+/// próprio e recebe o cabeçalho de quem a hospeda.
 class EstoqueCentralPage extends StatefulWidget {
-  const EstoqueCentralPage({super.key, this.repository});
+  const EstoqueCentralPage({super.key, this.repository, this.header});
   final EstoqueRepository? repository;
+  final Widget? header;
   @override
   State<EstoqueCentralPage> createState() => _EstoqueCentralPageState();
 }
@@ -116,139 +118,101 @@ class _EstoqueCentralPageState extends State<EstoqueCentralPage> {
   @override
   Widget build(BuildContext context) {
     final mobile = AppBreakpoints.isMobile(context);
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Estoque central'),
-        actions: [
-          if (!mobile) ...[
-            TextButton(
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const InventarioListPage()),
-              ),
-              child: const Text('Inventário'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const TransferenciaEstoquePage(),
-                ),
-              ),
-              child: const Text('Nova transferência'),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Padding(
-              padding: const EdgeInsets.only(right: AppSpacing.lg),
-              child: FilledButton.icon(
-                onPressed: () => _movimentar(),
-                icon: const Icon(Icons.swap_vert, size: 18),
-                label: const Text('Movimentar'),
-              ),
-            ),
-          ],
-        ],
-      ),
-      floatingActionButton: mobile
-          ? FloatingActionButton.extended(
-              onPressed: () => _movimentar(),
-              icon: const Icon(Icons.swap_vert),
-              label: const Text('Movimentar'),
-            )
-          : null,
-      body: RefreshIndicator(
-        onRefresh: load,
-        child: ListView(
-          controller: _scroll,
-          children: [
-            AppContent(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Wrap(
-                    spacing: AppSpacing.xl,
-                    runSpacing: AppSpacing.md,
-                    crossAxisAlignment: WrapCrossAlignment.end,
-                    children: [
-                      SizedBox(
-                        width: mobile ? double.infinity : 420,
-                        child: AppSearchField(
-                          controller: search,
-                          hintText: 'Buscar por nome, SKU ou código de barras',
-                          onSubmitted: (_) => load(),
-                        ),
+    return RefreshIndicator(
+      onRefresh: load,
+      child: ListView(
+        controller: _scroll,
+        children: [
+          AppContent(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ?widget.header,
+                Wrap(
+                  spacing: AppSpacing.xl,
+                  runSpacing: AppSpacing.md,
+                  crossAxisAlignment: WrapCrossAlignment.end,
+                  children: [
+                    SizedBox(
+                      width: mobile ? double.infinity : 420,
+                      child: AppSearchField(
+                        controller: search,
+                        hintText: 'Buscar por nome, SKU ou código de barras',
+                        onSubmitted: (_) => load(),
                       ),
-                      SizedBox(
-                        width: mobile ? double.infinity : 220,
-                        child: DropdownButtonFormField<String?>(
-                          initialValue: categoria,
-                          isExpanded: true,
-                          decoration: const InputDecoration(
-                            labelText: 'Categoria',
+                    ),
+                    SizedBox(
+                      width: mobile ? double.infinity : 220,
+                      child: DropdownButtonFormField<String?>(
+                        initialValue: categoria,
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Categoria',
+                        ),
+                        items: [
+                          const DropdownMenuItem(
+                            value: null,
+                            child: Text('Todas'),
                           ),
-                          items: [
-                            const DropdownMenuItem(
-                              value: null,
-                              child: Text('Todas'),
+                          ..._categorias.map(
+                            (value) => DropdownMenuItem(
+                              value: value,
+                              child: Text(_categoriaLabel(value)),
                             ),
-                            ..._categorias.map(
-                              (value) => DropdownMenuItem(
-                                value: value,
-                                child: Text(_categoriaLabel(value)),
-                              ),
-                            ),
-                          ],
-                          onChanged: (value) {
-                            categoria = value;
-                            load();
-                          },
-                        ),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          categoria = value;
+                          load();
+                        },
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  Wrap(
-                    spacing: AppSpacing.sm,
-                    children: [
-                      for (final (value, label) in const [
-                        (true, 'Ativos'),
-                        (false, 'Inativos'),
-                        (null, 'Todos'),
-                      ])
-                        ChoiceChip(
-                          label: Text(label),
-                          selected: ativo == value,
-                          onSelected: (_) {
-                            ativo = value;
-                            load();
-                          },
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
-                  _body(mobile),
-                  if (!loading && error == null && items.isNotEmpty) _footer(),
-                  const SizedBox(height: 88),
-                ],
-              ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Wrap(
+                  spacing: AppSpacing.sm,
+                  children: [
+                    for (final (value, label) in const [
+                      (true, 'Ativos'),
+                      (false, 'Inativos'),
+                      (null, 'Todos'),
+                    ])
+                      ChoiceChip(
+                        label: Text(label),
+                        selected: ativo == value,
+                        onSelected: (_) {
+                          ativo = value;
+                          load();
+                        },
+                      ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                _body(mobile),
+                if (!loading && error == null && items.isNotEmpty) _footer(),
+                const SizedBox(height: 88),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _body(bool mobile) {
     final theme = Theme.of(context);
-    if (loading) return const AppLoadingState(label: 'Carregando saldos…');
+    if (loading) {
+      return const AppLoadingState(label: 'Carregando saldos…');
+    }
     if (error != null) return AppErrorState(message: error!, onRetry: load);
     if (items.isEmpty) {
       return AppEmptyState(
         icon: Icons.warehouse_outlined,
         title: 'Nenhum produto possui saldo central',
-        message: 'Use Entrada para iniciar o estoque.',
+        message: 'Receba mercadoria por NF-e ou registre uma entrada manual.',
         action: FilledButton(
-          onPressed: () => _movimentar(),
+          onPressed: _entradaManual,
           child: const Text('Registrar entrada'),
         ),
       );
@@ -270,7 +234,7 @@ class _EstoqueCentralPageState extends State<EstoqueCentralPage> {
                 '${item.quantidade.fixedScale(3).replaceAll('.', ',')} ${item.unidadeMedida}',
                 style: balanceStyle(item),
               ),
-              onTap: () => _movimentar(item: item),
+              onTap: () => _abrir(item),
             ),
         ],
       );
@@ -285,12 +249,11 @@ class _EstoqueCentralPageState extends State<EstoqueCentralPage> {
         DataColumn(label: Text('Localização')),
         DataColumn(label: Text('Saldo'), numeric: true),
         DataColumn(label: Text('Status')),
-        DataColumn(label: SizedBox.shrink()),
       ],
       rows: [
         for (final item in items)
           DataRow(
-            onSelectChanged: (_) => _movimentar(item: item),
+            onSelectChanged: (_) => _abrir(item),
             cells: [
               DataCell(
                 Column(
@@ -324,13 +287,6 @@ class _EstoqueCentralPageState extends State<EstoqueCentralPage> {
                         tone: AppStatusTone.success,
                       )
                     : const AppStatusBadge(label: 'Inativo'),
-              ),
-              DataCell(
-                IconButton(
-                  tooltip: 'Movimentar ${item.produto}',
-                  onPressed: () => _movimentar(item: item),
-                  icon: const Icon(Icons.swap_vert),
-                ),
               ),
             ],
           ),
@@ -378,104 +334,190 @@ class _EstoqueCentralPageState extends State<EstoqueCentralPage> {
     );
   }
 
-  Future<void> _movimentar({EstoqueCentral? item}) async {
-    // Com o produto já escolhido na lista, não há o que selecionar.
-    List<Produto> produtos = const [];
-    if (item == null) {
-      try {
-        produtos = await repository.listarProdutos();
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(e.toString())));
-        }
-        return;
+  Future<void> _abrir(EstoqueCentral item) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EstoqueProdutoPage(
+          produtoId: item.produtoId,
+          nome: item.produto,
+          central: item,
+          repository: repository,
+        ),
+      ),
+    );
+    if (mounted) await load();
+  }
+
+  Future<void> _entradaManual() async {
+    final changed = await movimentarEstoqueCentral(
+      context,
+      repository,
+      somenteEntrada: true,
+    );
+    if (changed && mounted) await load();
+  }
+}
+
+/// Abre o painel de entrada, saída ou ajuste do estoque central. Devolve true
+/// quando o saldo mudou. Com [somenteEntrada] o painel só registra entradas.
+Future<bool> movimentarEstoqueCentral(
+  BuildContext context,
+  EstoqueRepository repository, {
+  EstoqueCentral? item,
+  bool somenteEntrada = false,
+}) async {
+  // Com o produto já escolhido na lista, não há o que selecionar.
+  List<Produto> produtos = const [];
+  if (item == null) {
+    try {
+      produtos = await repository.listarProdutos();
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
       }
-      if (!mounted || produtos.isEmpty) return;
+      return false;
     }
-    String produtoId = item?.produtoId ?? produtos.first.id!;
-    String operacao = 'ENTRADA';
-    // Começa vazio: pré-preencher com o saldo fazia uma Entrada confirmada
-    // sem querer dobrar o estoque.
-    final quantidade = TextEditingController();
-    final motivo = TextEditingController();
-    Widget panel(BuildContext context, StateSetter setPanel) {
-      final theme = Theme.of(context);
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.xl,
-              AppSpacing.lg,
-              AppSpacing.sm,
-              AppSpacing.sm,
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Movimentar estoque central',
-                    style: theme.textTheme.titleLarge,
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'Fechar',
-                  onPressed: () => Navigator.pop(context, false),
-                  icon: const Icon(Icons.close),
-                ),
-              ],
-            ),
+    if (!context.mounted) return false;
+    if (produtos.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cadastre um produto antes de dar entrada.'),
+        ),
+      );
+      return false;
+    }
+  }
+  String produtoId = item?.produtoId ?? produtos.first.id!;
+  String operacao = 'ENTRADA';
+  // Começa vazio: pré-preencher com o saldo fazia uma Entrada confirmada
+  // sem querer dobrar o estoque.
+  final quantidade = TextEditingController();
+  final motivo = TextEditingController();
+  String? erroQuantidade;
+  String? erroEnvio;
+  var salvando = false;
+  // Valida e grava com o painel aberto: um erro não descarta o que foi
+  // digitado.
+  Future<void> confirmar(BuildContext context, StateSetter setPanel) async {
+    final texto = quantidade.text.trim();
+    DecimalValue? valor;
+    String? invalido;
+    if (texto.isEmpty) {
+      invalido = 'Informe a quantidade';
+    } else if (!RegExp(r'^-?\d+([\.,]\d{1,3})?$').hasMatch(texto)) {
+      invalido = 'Use um número com até 3 casas decimais';
+    } else {
+      valor = DecimalValue.parse(texto);
+      if (operacao != 'AJUSTE' && !valor.isPositive) {
+        invalido = 'A quantidade deve ser maior que zero';
+      }
+    }
+    if (invalido != null || valor == null) {
+      setPanel(() => erroQuantidade = invalido);
+      return;
+    }
+    setPanel(() {
+      erroQuantidade = null;
+      erroEnvio = null;
+      salvando = true;
+    });
+    try {
+      await repository.movimentar(
+        produtoId,
+        operacao,
+        valor,
+        motivo.text.trim(),
+      );
+      if (context.mounted) Navigator.pop(context, true);
+    } catch (e) {
+      if (context.mounted) {
+        setPanel(() {
+          erroEnvio = e.toString();
+          salvando = false;
+        });
+      }
+    }
+  }
+
+  Widget panel(BuildContext context, StateSetter setPanel) {
+    final theme = Theme.of(context);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.xl,
+            AppSpacing.lg,
+            AppSpacing.sm,
+            AppSpacing.sm,
           ),
-          Flexible(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (item == null)
-                    DropdownButtonFormField<String>(
-                      initialValue: produtoId,
-                      isExpanded: true,
-                      decoration: const InputDecoration(labelText: 'Produto'),
-                      items: produtos
-                          .map(
-                            (p) => DropdownMenuItem(
-                              value: p.id,
-                              child: Text(
-                                p.nome,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (v) => produtoId = v!,
-                    )
-                  else
-                    SizedBox(
-                      width: double.infinity,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            item.produto,
-                            style: theme.textTheme.titleMedium,
-                          ),
-                          const SizedBox(height: AppSpacing.xs),
-                          Text(
-                            'SKU ${item.codigoInterno} · Saldo atual: '
-                            '${item.quantidade.fixedScale(3).replaceAll('.', ',')} ${item.unidadeMedida}',
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  somenteEntrada
+                      ? 'Entrada manual'
+                      : 'Corrigir saldo do central',
+                  style: theme.textTheme.titleLarge,
+                ),
+              ),
+              IconButton(
+                tooltip: 'Fechar',
+                onPressed: () => Navigator.pop(context, false),
+                icon: const Icon(Icons.close),
+              ),
+            ],
+          ),
+        ),
+        Flexible(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (item == null)
+                  DropdownButtonFormField<String>(
+                    initialValue: produtoId,
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: 'Produto'),
+                    items: produtos
+                        .map(
+                          (p) => DropdownMenuItem(
+                            value: p.id,
+                            child: Text(
+                              p.nome,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                        ],
-                      ),
+                        )
+                        .toList(),
+                    onChanged: (v) => produtoId = v!,
+                  )
+                else
+                  SizedBox(
+                    width: double.infinity,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(item.produto, style: theme.textTheme.titleMedium),
+                        const SizedBox(height: AppSpacing.xs),
+                        Text(
+                          'SKU ${item.codigoInterno} · Saldo atual: '
+                          '${item.quantidade.fixedScale(3).replaceAll('.', ',')} ${item.unidadeMedida}',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
                     ),
-                  const SizedBox(height: AppSpacing.xl),
+                  ),
+                const SizedBox(height: AppSpacing.xl),
+                if (!somenteEntrada)
                   SizedBox(
                     width: double.infinity,
                     child: SegmentedButton<String>(
@@ -490,137 +532,121 @@ class _EstoqueCentralPageState extends State<EstoqueCentralPage> {
                           setPanel(() => operacao = v.first),
                     ),
                   ),
+                const SizedBox(height: AppSpacing.md),
+                TextField(
+                  controller: quantidade,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                    signed: true,
+                  ),
+                  onChanged: (_) => setPanel(() => erroQuantidade = null),
+                  decoration: InputDecoration(
+                    errorText: erroQuantidade,
+                    labelText: operacao == 'AJUSTE'
+                        ? 'Saldo físico contado'
+                        : 'Quantidade',
+                    helperText:
+                        _novoSaldo(item, operacao, quantidade.text) ??
+                        'Até 3 casas decimais; saldo negativo é permitido no ajuste',
+                    helperStyle:
+                        _novoSaldo(item, operacao, quantidade.text) == null
+                        ? null
+                        : theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: motivo,
+                  maxLength: 300,
+                  decoration: const InputDecoration(labelText: 'Motivo'),
+                ),
+                if (erroEnvio != null) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  AppBanner(tone: AppStatusTone.critical, message: erroEnvio!),
                   const SizedBox(height: AppSpacing.md),
-                  TextField(
-                    controller: quantidade,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                      signed: true,
-                    ),
-                    onChanged: (_) => setPanel(() {}),
-                    decoration: InputDecoration(
-                      labelText: operacao == 'AJUSTE'
-                          ? 'Saldo físico contado'
-                          : 'Quantidade',
-                      helperText:
-                          _novoSaldo(item, operacao, quantidade.text) ??
-                          'Até 3 casas decimais; saldo negativo é permitido no ajuste',
-                      helperStyle:
-                          _novoSaldo(item, operacao, quantidade.text) == null
-                          ? null
-                          : theme.textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: motivo,
-                    maxLength: 300,
-                    decoration: const InputDecoration(labelText: 'Motivo'),
-                  ),
                 ],
-              ),
-            ),
-          ),
-          const Divider(height: 1),
-          Padding(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: const Text('Cancelar'),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                FilledButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  child: const Text('Confirmar'),
-                ),
               ],
             ),
           ),
-        ],
-      );
-    }
-
-    // Painel lateral no computador, folha inferior no celular.
-    final Future<bool?> sheet = AppBreakpoints.isMobile(context)
-        ? showModalBottomSheet<bool>(
-            context: context,
-            isScrollControlled: true,
-            showDragHandle: true,
-            builder: (context) => Padding(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.viewInsetsOf(context).bottom,
+        ),
+        const Divider(height: 1),
+        Padding(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancelar'),
               ),
-              child: SafeArea(child: StatefulBuilder(builder: panel)),
+              const SizedBox(width: AppSpacing.sm),
+              FilledButton(
+                onPressed: salvando ? null : () => confirmar(context, setPanel),
+                child: Text(salvando ? 'Salvando…' : 'Confirmar'),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Painel lateral no computador, folha inferior no celular.
+  final Future<bool?> sheet = AppBreakpoints.isMobile(context)
+      ? showModalBottomSheet<bool>(
+          context: context,
+          isScrollControlled: true,
+          showDragHandle: true,
+          builder: (context) => Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.viewInsetsOf(context).bottom,
             ),
-          )
-        : showGeneralDialog<bool>(
-            context: context,
-            barrierDismissible: true,
-            barrierLabel: 'Fechar',
-            barrierColor: Colors.black26,
-            transitionDuration: const Duration(milliseconds: 220),
-            pageBuilder: (context, _, _) => Align(
-              alignment: Alignment.centerRight,
-              child: Material(
-                color: Theme.of(context).colorScheme.surface,
-                elevation: 1,
-                child: SizedBox(
-                  width: 440,
-                  height: double.infinity,
-                  child: SafeArea(
-                    child: Column(
-                      children: [
-                        Expanded(
-                          child: Align(
-                            alignment: Alignment.topCenter,
-                            child: StatefulBuilder(builder: panel),
-                          ),
+            child: SafeArea(child: StatefulBuilder(builder: panel)),
+          ),
+        )
+      : showGeneralDialog<bool>(
+          context: context,
+          barrierDismissible: true,
+          barrierLabel: 'Fechar',
+          barrierColor: Colors.black26,
+          transitionDuration: const Duration(milliseconds: 220),
+          pageBuilder: (context, _, _) => Align(
+            alignment: Alignment.centerRight,
+            child: Material(
+              color: Theme.of(context).colorScheme.surface,
+              elevation: 1,
+              child: SizedBox(
+                width: 440,
+                height: double.infinity,
+                child: SafeArea(
+                  child: Column(
+                    children: [
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.topCenter,
+                          child: StatefulBuilder(builder: panel),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
               ),
             ),
-            transitionBuilder: (context, animation, _, child) =>
-                SlideTransition(
-                  position: Tween(begin: const Offset(1, 0), end: Offset.zero)
-                      .animate(
-                        CurvedAnimation(
-                          parent: animation,
-                          curve: Curves.easeOutCubic,
-                        ),
-                      ),
-                  child: child,
+          ),
+          transitionBuilder: (context, animation, _, child) => SlideTransition(
+            position: Tween(begin: const Offset(1, 0), end: Offset.zero)
+                .animate(
+                  CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOutCubic,
+                  ),
                 ),
-          );
-    final ok = await sheet;
-    if (ok != true) return;
-    try {
-      final value = DecimalValue.parse(quantidade.text);
-      if (!RegExp(r'^-?\d+([\.,]\d{1,3})?$').hasMatch(quantidade.text.trim())) {
-        throw const FormatException('Use no máximo 3 casas decimais');
-      }
-      await repository.movimentar(
-        produtoId,
-        operacao,
-        value,
-        motivo.text.trim(),
-      );
-      await load();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.toString())));
-      }
-    }
-  }
+            child: child,
+          ),
+        );
+  return await sheet == true;
 }
 
 /// Prévia do saldo após a operação, ou null se não der para calcular.

@@ -133,6 +133,17 @@ class ProdutoRepository {
           )
           .toList();
 
+  /// Marca o produto como disponível em todos os Condomínios. Ao marcar, o
+  /// backend associa os Condomínios atuais e passa a incluir os novos.
+  Future<void> definirDisponivelEmTodos({
+    required String produtoId,
+    required bool ativo,
+  }) async {
+    await client.put('/produtos/$produtoId/disponibilidade-todos-condominios', {
+      'ativo': ativo,
+    });
+  }
+
   Future<List<CondominioOption>> listarCondominios() async =>
       ((await client.get('/condominios')) as List)
           .whereType<Map>()

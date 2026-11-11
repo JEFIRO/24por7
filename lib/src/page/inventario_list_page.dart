@@ -9,9 +9,11 @@ import '../model/inventario.dart';
 import '../model/inventario_repository.dart';
 import 'inventario_detail_page.dart';
 
+/// Lista de inventários. É uma aba da tela de Estoque.
 class InventarioListPage extends StatefulWidget {
-  const InventarioListPage({super.key, this.repository});
+  const InventarioListPage({super.key, this.repository, this.header});
   final InventarioRepository? repository;
+  final Widget? header;
 
   @override
   State<InventarioListPage> createState() => _InventarioListPageState();
@@ -47,88 +49,8 @@ class _InventarioListPageState extends State<InventarioListPage> {
   }
 
   Future<void> _novo() async {
-    bool cega = false;
-    final descricao = TextEditingController();
-    final criar = await showDialog<bool>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setLocal) => AlertDialog(
-          title: const Text('Novo inventário'),
-          content: SizedBox(
-            width: 440,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const InputDecorator(
-                  decoration: InputDecoration(
-                    labelText: 'Local',
-                    prefixIcon: Icon(Icons.warehouse_outlined),
-                    enabled: false,
-                  ),
-                  child: Text('Estoque central'),
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                TextField(
-                  controller: descricao,
-                  decoration: const InputDecoration(
-                    labelText: 'Descrição (opcional)',
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  value: cega,
-                  title: const Text('Contagem cega'),
-                  subtitle: const Text(
-                    'Oculta o saldo esperado durante a contagem',
-                  ),
-                  onChanged: (value) => setLocal(() => cega = value),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                const AppBanner(
-                  tone: AppStatusTone.info,
-                  message: 'O saldo atual será congelado como referência.',
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancelar'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Iniciar'),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (criar != true || !mounted) return;
-    try {
-      final inventario = await _repository.iniciar(
-        contagemCega: cega,
-        descricao: descricao.text.trim().isEmpty ? null : descricao.text.trim(),
-      );
-      if (!mounted) return;
-      await Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => InventarioDetailPage(
-            inventarioId: inventario.id,
-            repository: _repository,
-          ),
-        ),
-      );
+    if (await iniciarInventario(context, _repository) && mounted) {
       await _carregar();
-    } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(error.toString())));
-      }
     }
   }
 
@@ -148,91 +70,69 @@ class _InventarioListPageState extends State<InventarioListPage> {
   @override
   Widget build(BuildContext context) {
     final mobile = AppBreakpoints.isMobile(context);
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Inventários'),
-        actions: [
-          if (!mobile)
-            Padding(
-              padding: const EdgeInsets.only(right: AppSpacing.lg),
-              child: FilledButton.icon(
-                onPressed: _loading ? null : _novo,
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('Novo inventário'),
-              ),
-            ),
-        ],
-      ),
-      floatingActionButton: mobile
-          ? FloatingActionButton.extended(
-              onPressed: _loading ? null : _novo,
-              icon: const Icon(Icons.add),
-              label: const Text('Novo inventário'),
-            )
-          : null,
-      body: RefreshIndicator(
-        onRefresh: _carregar,
-        child: ListView(
-          children: [
-            AppContent(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Wrap(
-                    spacing: AppSpacing.sm,
-                    runSpacing: AppSpacing.sm,
-                    children: [
-                      for (final (value, label) in const [
-                        (null, 'Todos'),
-                        ('EM_CONTAGEM', 'Em contagem'),
-                        ('COM_CONFLITO', 'Com conflito'),
-                        ('FINALIZADO', 'Finalizados'),
-                        ('CANCELADO', 'Cancelados'),
-                      ])
-                        ChoiceChip(
-                          label: Text(label),
-                          selected: _status == value,
-                          onSelected: (_) {
-                            _status = value;
-                            _carregar();
-                          },
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
-                  if (_loading)
-                    const AppLoadingState(label: 'Carregando inventários…')
-                  else if (_error != null)
-                    AppErrorState(message: _error!, onRetry: _carregar)
-                  else if (_itens.isEmpty)
-                    AppEmptyState(
-                      icon: Icons.fact_check_outlined,
-                      title: 'Nenhum inventário encontrado',
-                      message:
-                          'Inicie uma contagem física para comparar com o saldo do sistema.',
-                      action: FilledButton(
-                        onPressed: _novo,
-                        child: const Text('Novo inventário'),
+    return RefreshIndicator(
+      onRefresh: _carregar,
+      child: ListView(
+        children: [
+          AppContent(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ?widget.header,
+                Wrap(
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.sm,
+                  children: [
+                    for (final (value, label) in const [
+                      (null, 'Todos'),
+                      ('EM_CONTAGEM', 'Em contagem'),
+                      ('COM_CONFLITO', 'Com conflito'),
+                      ('FINALIZADO', 'Finalizados'),
+                      ('CANCELADO', 'Cancelados'),
+                    ])
+                      ChoiceChip(
+                        label: Text(label),
+                        selected: _status == value,
+                        onSelected: (_) {
+                          _status = value;
+                          _carregar();
+                        },
                       ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                if (_loading)
+                  const AppLoadingState(label: 'Carregando inventários…')
+                else if (_error != null)
+                  AppErrorState(message: _error!, onRetry: _carregar)
+                else if (_itens.isEmpty)
+                  AppEmptyState(
+                    icon: Icons.fact_check_outlined,
+                    title: 'Nenhum inventário encontrado',
+                    message:
+                        'Inicie uma contagem física para comparar com o saldo do sistema.',
+                    action: FilledButton(
+                      onPressed: _novo,
+                      child: const Text('Novo inventário'),
+                    ),
+                  )
+                else if (mobile)
+                  for (final item in _itens)
+                    AppListRow(
+                      title: item.descricao ?? item.localNome,
+                      meta:
+                          '${item.contados} de ${item.totalProdutos} contados · '
+                          '${item.divergencias == 1 ? '1 divergência' : '${item.divergencias} divergências'}',
+                      trailing: inventoryStatusBadge(item.status),
+                      onTap: () => _open(item),
                     )
-                  else if (mobile)
-                    for (final item in _itens)
-                      AppListRow(
-                        title: item.descricao ?? item.localNome,
-                        meta:
-                            '${item.contados} de ${item.totalProdutos} contados · '
-                            '${item.divergencias == 1 ? '1 divergência' : '${item.divergencias} divergências'}',
-                        trailing: inventoryStatusBadge(item.status),
-                        onTap: () => _open(item),
-                      )
-                  else
-                    _table(),
-                  const SizedBox(height: 88),
-                ],
-              ),
+                else
+                  _table(),
+                const SizedBox(height: 88),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -306,6 +206,98 @@ class _InventarioListPageState extends State<InventarioListPage> {
           ),
       ],
     );
+  }
+}
+
+/// Pergunta como contar, inicia o inventário do estoque central e abre a
+/// contagem. Devolve true quando um inventário foi criado.
+Future<bool> iniciarInventario(
+  BuildContext context,
+  InventarioRepository repository,
+) async {
+  bool cega = false;
+  final descricao = TextEditingController();
+  final criar = await showDialog<bool>(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setLocal) => AlertDialog(
+        title: const Text('Novo inventário'),
+        content: SizedBox(
+          width: 440,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const InputDecorator(
+                decoration: InputDecoration(
+                  labelText: 'Local',
+                  prefixIcon: Icon(Icons.warehouse_outlined),
+                  enabled: false,
+                ),
+                child: Text('Estoque central'),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              TextField(
+                controller: descricao,
+                decoration: const InputDecoration(
+                  labelText: 'Descrição (opcional)',
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: cega,
+                title: const Text('Contagem cega'),
+                subtitle: const Text(
+                  'Oculta o saldo esperado durante a contagem',
+                ),
+                onChanged: (value) => setLocal(() => cega = value),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              const AppBanner(
+                tone: AppStatusTone.info,
+                message: 'O saldo atual será congelado como referência.',
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Iniciar'),
+          ),
+        ],
+      ),
+    ),
+  );
+  if (criar != true || !context.mounted) return false;
+  try {
+    final inventario = await repository.iniciar(
+      contagemCega: cega,
+      descricao: descricao.text.trim().isEmpty ? null : descricao.text.trim(),
+    );
+    if (!context.mounted) return true;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => InventarioDetailPage(
+          inventarioId: inventario.id,
+          repository: repository,
+        ),
+      ),
+    );
+    return true;
+  } catch (error) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
+    }
+    return false;
   }
 }
 

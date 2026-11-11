@@ -396,6 +396,7 @@ class _AdminHistoryPageState<T> extends State<_AdminHistoryPage<T>> {
                             title: spec.title,
                             meta: spec.meta,
                             metaMaxLines: 4,
+                            trailingOnTitle: true,
                             leading: widget.leading?.call(item),
                             trailing: spec.trailing,
                             muted: widget.muted?.call(item) ?? false,

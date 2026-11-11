@@ -211,6 +211,7 @@ class AppListRow extends StatelessWidget {
     this.showDivider = true,
     this.muted = false,
     this.metaMaxLines = 2,
+    this.trailingOnTitle = false,
     super.key,
   });
 
@@ -224,10 +225,20 @@ class AppListRow extends StatelessWidget {
   final bool muted;
   final int metaMaxLines;
 
+  /// Põe [trailing] na linha do título, à direita, em vez de centralizado.
+  final bool trailingOnTitle;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final titleText = Text(
+      title,
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      style: (dense ? theme.textTheme.titleSmall : theme.textTheme.titleMedium)
+          ?.copyWith(color: muted ? scheme.onSurfaceVariant : null),
+    );
     return InkWell(
       onTap: onTap,
       hoverColor: scheme.surfaceContainerLow,
@@ -252,18 +263,16 @@ class AppListRow extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style:
-                        (dense
-                                ? theme.textTheme.titleSmall
-                                : theme.textTheme.titleMedium)
-                            ?.copyWith(
-                              color: muted ? scheme.onSurfaceVariant : null,
-                            ),
-                  ),
+                  if (trailingOnTitle && trailing != null)
+                    Row(
+                      children: [
+                        Expanded(child: titleText),
+                        const SizedBox(width: AppSpacing.md),
+                        trailing!,
+                      ],
+                    )
+                  else
+                    titleText,
                   if (meta != null && meta!.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 2),
@@ -279,7 +288,7 @@ class AppListRow extends StatelessWidget {
                 ],
               ),
             ),
-            if (trailing != null) ...[
+            if (trailing != null && !trailingOnTitle) ...[
               const SizedBox(width: AppSpacing.md),
               trailing!,
             ],
