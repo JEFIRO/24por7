@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/widgets/app_refresh.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/widgets/app_content.dart';
 import '../../core/widgets/async_state.dart';
@@ -169,7 +170,7 @@ class _CondominioTerminalPageState extends State<CondominioTerminalPage> {
         ? const AppLoadingState(label: 'Carregando unidades e Terminais…')
         : _error != null
         ? AppErrorState(message: _error!, onRetry: _load)
-        : RefreshIndicator(
+        : AppRefreshIndicator(
             onRefresh: _load,
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),

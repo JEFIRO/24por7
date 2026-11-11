@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/widgets/app_feedback.dart';
 import '../../core/theme/app_tokens.dart';
 import '../model/api_client.dart';
 import '../model/operational_repository.dart';
@@ -113,10 +114,8 @@ Future<bool?> showTerminalPairingDialog(
   required TerminalAdmin terminal,
 }) => showDialog<bool>(
   context: context,
-  builder: (_) => _TerminalPairingDialog(
-    repository: repository,
-    terminal: terminal,
-  ),
+  builder: (_) =>
+      _TerminalPairingDialog(repository: repository, terminal: terminal),
 );
 
 class _TerminalPairingDialog extends StatefulWidget {
@@ -205,9 +204,10 @@ class _TerminalPairingDialogState extends State<_TerminalPairingDialog> {
           onPressed: _loading ? null : () => Navigator.pop(context),
           child: const Text('Cancelar'),
         ),
-        FilledButton(
+        FilledButton.icon(
           onPressed: _loading ? null : _pair,
-          child: Text(_loading ? 'Pareando…' : 'Parear'),
+          icon: AppBusyIcon(busy: _loading, icon: Icons.link),
+          label: Text(_loading ? 'Pareando…' : 'Parear'),
         ),
       ],
     );

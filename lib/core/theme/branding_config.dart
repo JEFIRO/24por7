@@ -1,18 +1,17 @@
 import 'package:flutter/material.dart';
 
+import 'app_brand.dart';
+
+/// O que cada Empresa personaliza: nome e logo. Cores são da marca.
 @immutable
 class BrandingConfig {
   const BrandingConfig({
-    this.displayName = 'App 24/7',
-    this.primaryColor = const Color(0xFF155EEF),
-    this.secondaryColor = const Color(0xFF0E9384),
+    this.displayName = AppBrand.name,
     this.logoUrl,
     this.compactLogoUrl,
   });
 
   final String displayName;
-  final Color primaryColor;
-  final Color secondaryColor;
   final String? logoUrl;
   final String? compactLogoUrl;
 
@@ -20,14 +19,10 @@ class BrandingConfig {
 
   BrandingConfig copyWith({
     String? displayName,
-    Color? primaryColor,
-    Color? secondaryColor,
     String? logoUrl,
     String? compactLogoUrl,
   }) => BrandingConfig(
     displayName: displayName ?? this.displayName,
-    primaryColor: primaryColor ?? this.primaryColor,
-    secondaryColor: secondaryColor ?? this.secondaryColor,
     logoUrl: logoUrl ?? this.logoUrl,
     compactLogoUrl: compactLogoUrl ?? this.compactLogoUrl,
   );

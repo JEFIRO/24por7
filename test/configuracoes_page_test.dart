@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:app_24por7/core/theme/app_brand.dart';
 import 'package:app_24por7/core/theme/app_theme.dart';
-import 'package:app_24por7/core/theme/branding_config.dart';
 import 'package:app_24por7/src/model/api_client.dart';
 import 'package:app_24por7/src/model/empresa_branding.dart';
 import 'package:app_24por7/src/page/configuracoes_page.dart';
@@ -97,7 +97,7 @@ void main() {
     final api = client();
     await tester.pumpWidget(
       MaterialApp(
-        theme: AppTheme.light(BrandingConfig.fallback),
+        theme: AppTheme.light(),
         home: Scaffold(
           body: ConfiguracoesPage(
             brandingRepository: BrandingRepository(client: api),
@@ -132,11 +132,10 @@ void main() {
     expect(body['logoUrl'], 'https://cdn.exemplo.com/logo.png');
     expect(brandingNotifier.value.displayName, 'Bom Preço');
     expect(brandingNotifier.value.logoUrl, 'https://cdn.exemplo.com/logo.png');
-    // Cores padrão do back não substituem o design system do app.
-    expect(
-      brandingNotifier.value.primaryColor,
-      BrandingConfig.fallback.primaryColor,
-    );
+    // As cores do back voltam como vieram: o painel não as edita.
+    expect(body['corPrincipal'], '#169DFF');
+    expect(body['corSecundaria'], '#62C8FF');
+    expect(body['corDestaque'], '#00D084');
   });
 
   testWidgets('envia o logo e mantém edições não salvas', (tester) async {
@@ -199,14 +198,14 @@ void main() {
     expect(find.text('Perfil salvo'), findsOneWidget);
   });
 
-  test('cores personalizadas viram o tema do painel', () {
+  test('cores da Empresa não mudam o tema do painel', () {
     final config = EmpresaBranding.fromJson({
       'nomeExibicao': 'X',
       'corPrincipal': '#FF0000',
       'corSecundaria': '#00FF00',
       'corDestaque': '#0000FF',
     }).toConfig();
-    expect(config.primaryColor, const Color(0xFFFF0000));
-    expect(config.secondaryColor, const Color(0xFF00FF00));
+    expect(config.displayName, 'X');
+    expect(AppTheme.light().colorScheme.primary, AppBrand.blue);
   });
 }

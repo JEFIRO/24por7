@@ -1,7 +1,6 @@
 import 'dart:typed_data';
 
 import 'package:app_24por7/core/theme/app_theme.dart';
-import 'package:app_24por7/core/theme/branding_config.dart';
 import 'package:app_24por7/src/model/api_client.dart';
 import 'package:app_24por7/src/model/nota_fiscal_entrada.dart';
 import 'package:app_24por7/src/model/nota_fiscal_entrada_repository.dart';
@@ -133,7 +132,7 @@ void main() {
     final repository = _FakeRepository();
     await tester.pumpWidget(
       MaterialApp(
-        theme: AppTheme.light(BrandingConfig.fallback),
+        theme: AppTheme.light(),
         home: NotaFiscalEntradaPage(
           repository: repository,
           produtos: () async => const [],

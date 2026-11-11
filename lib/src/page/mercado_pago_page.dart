@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/widgets/app_refresh.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/widgets/app_content.dart';
 import '../../core/widgets/async_state.dart';
@@ -173,10 +174,13 @@ class _MercadoPagoPageState extends State<MercadoPagoPage> {
 
   @override
   Widget build(BuildContext context) => _loading
-      ? const AppLoadingState(label: 'Consultando configuração…')
+      ? const AppLoadingState(
+          label: 'Consultando configuração…',
+          layout: AppSkeletonLayout.detail,
+        )
       : _error != null
       ? AppErrorState(message: _error!, onRetry: _load)
-      : RefreshIndicator(
+      : AppRefreshIndicator(
           onRefresh: _load,
           child: ListView(children: [AppContent(child: _content())]),
         );

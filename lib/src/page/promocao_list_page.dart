@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/widgets/app_refresh.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/widgets/app_content.dart';
 import '../../core/widgets/async_state.dart';
@@ -97,7 +98,7 @@ class _PromocaoListPageState extends State<PromocaoListPage> {
               label: const Text('Nova promoção'),
             )
           : null,
-      body: RefreshIndicator(
+      body: AppRefreshIndicator(
         onRefresh: _load,
         child: ListView(
           children: [
@@ -213,7 +214,10 @@ class _PromocaoListPageState extends State<PromocaoListPage> {
                   ),
                   const SizedBox(height: AppSpacing.xl),
                   if (_loading)
-                    const AppLoadingState(label: 'Carregando promoções…')
+                    const AppLoadingState(
+                      label: 'Carregando promoções…',
+                      inline: true,
+                    )
                   else if (_error != null)
                     AppErrorState(
                       title: 'Não foi possível carregar as promoções',
@@ -232,8 +236,9 @@ class _PromocaoListPageState extends State<PromocaoListPage> {
                       ),
                     )
                   else if (mobile)
-                    for (final promotion in _items)
+                    for (final (i, promotion) in _items.indexed)
                       AppListRow(
+                        entranceIndex: i,
                         title: promotion.nome,
                         meta:
                             '${promotionValueLabel(promotion.tipo, promotion.valor)} · '

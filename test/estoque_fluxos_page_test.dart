@@ -1,5 +1,4 @@
 import 'package:app_24por7/core/theme/app_theme.dart';
-import 'package:app_24por7/core/theme/branding_config.dart';
 import 'package:app_24por7/src/model/admin_history.dart';
 import 'package:app_24por7/src/model/api_client.dart';
 import 'package:app_24por7/src/model/decimal_value.dart';
@@ -140,7 +139,7 @@ Future<void> _pump(
   addTearDown(tester.view.reset);
   await tester.pumpWidget(
     MaterialApp(
-      theme: AppTheme.light(BrandingConfig.fallback),
+      theme: AppTheme.light(),
       home: Scaffold(body: page),
     ),
   );

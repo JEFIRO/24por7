@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../../core/theme/app_theme.dart';
+import '../../core/theme/app_brand.dart';
 import '../../core/theme/app_tokens.dart';
-import '../../core/theme/branding_config.dart';
+import '../../core/widgets/app_feedback.dart';
+import '../../core/widgets/app_entrance.dart';
+import '../../core/widgets/brand_logo.dart';
 import '../model/api_client.dart';
 import '../model/empresa_branding.dart';
 
@@ -51,8 +53,7 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
-    final brand = BrandingScope.of(context);
-    final form = Center(
+    Widget form({required bool showLogo}) => Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(AppSpacing.xl),
         child: ConstrainedBox(
@@ -62,27 +63,21 @@ class _LoginPageState extends State<LoginPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 20,
-                      backgroundColor: AppThemeColors.of(context).brand,
-                      foregroundColor: AppThemeColors.of(context).onBrand,
-                      child: Text(brand.displayName.characters.first),
+                // Em telas largas a marca já está no painel ao lado.
+                if (showLogo) ...[
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: AppEntrance(
+                      child: BrandLogo(size: 120, animated: true, cycles: 2),
                     ),
-                    const SizedBox(width: AppSpacing.md),
-                    Expanded(
-                      child: Text(
-                        brand.displayName,
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.xxl),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                ],
                 Text(
                   'Entrar no painel',
-                  style: Theme.of(context).textTheme.headlineMedium,
+                  style: AppBrand.display(
+                    Theme.of(context).textTheme.headlineMedium,
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
@@ -114,25 +109,26 @@ class _LoginPageState extends State<LoginPage> {
                       v == null || v.isEmpty ? 'Informe a senha' : null,
                   onFieldSubmitted: (_) => _login(),
                 ),
-                if (_error != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: AppSpacing.lg),
-                    child: Text(
-                      _error!,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                    ),
-                  ),
+                AppReveal(
+                  child: _error == null
+                      ? null
+                      : Padding(
+                          key: ValueKey(_error),
+                          padding: const EdgeInsets.only(top: AppSpacing.lg),
+                          child: Text(
+                            _error!,
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: Theme.of(context).colorScheme.error,
+                                ),
+                          ),
+                        ),
+                ),
                 const SizedBox(height: AppSpacing.xl),
-                FilledButton(
+                FilledButton.icon(
                   onPressed: _loading ? null : _login,
-                  child: _loading
-                      ? const SizedBox.square(
-                          dimension: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Entrar'),
+                  icon: AppBusyIcon(busy: _loading, icon: Icons.login),
+                  label: Text(_loading ? 'Entrando…' : 'Entrar'),
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 TextButton(
@@ -151,46 +147,73 @@ class _LoginPageState extends State<LoginPage> {
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            if (constraints.maxWidth < AppBreakpoints.desktop) return form;
+            if (constraints.maxWidth < AppBreakpoints.desktop) {
+              return form(showLogo: true);
+            }
             return Row(
               children: [
-                Expanded(
-                  child: ColoredBox(
-                    color: AppThemeColors.of(context).brand,
-                    child: Padding(
-                      padding: const EdgeInsets.all(64),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            brand.displayName,
-                            style: Theme.of(context).textTheme.headlineLarge
-                                ?.copyWith(
-                                  color: AppThemeColors.of(context).onBrand,
-                                ),
-                          ),
-                          const SizedBox(height: AppSpacing.md),
-                          ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 440),
-                            child: Text(
-                              'Mercados autônomos dos seus Condomínios: Terminais, catálogo, estoque e pagamentos.',
-                              style: Theme.of(context).textTheme.titleMedium
-                                  ?.copyWith(
-                                    fontWeight: FontWeight.w400,
-                                    color: AppThemeColors.of(context).onBrand,
-                                  ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                Expanded(child: form),
+                const Expanded(child: _BrandPanel()),
+                Expanded(child: form(showLogo: false)),
               ],
             );
           },
+        ),
+      ),
+    );
+  }
+}
+
+/// Metade de marca do login em telas largas: logo, nome e o que o painel faz.
+class _BrandPanel extends StatelessWidget {
+  const _BrandPanel();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return ColoredBox(
+      color: scheme.surfaceContainerLow,
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.section + AppSpacing.xl),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const AppEntrance(
+              child: BrandLogo(
+                size: 220,
+                animated: true,
+                cycles: 2,
+                showWordmark: true,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xxl),
+            AppEntrance(
+              index: 2,
+              child: Container(
+                width: 48,
+                height: 4,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: AppBrand.orangeSweep),
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            AppEntrance(
+              index: 3,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 440),
+                child: Text(
+                  'Mercados autônomos dos seus Condomínios: Terminais, catálogo, estoque e pagamentos. Abertos 24 horas, 7 dias por semana.',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w400,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

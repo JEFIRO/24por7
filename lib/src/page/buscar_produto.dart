@@ -96,7 +96,12 @@ class _BuscarProdutoState extends State<BuscarProduto> {
                   child: const Text('Buscar'),
                 ),
               ),
-              if (_loading) const AppLoadingState(label: 'Buscando produto…'),
+              if (_loading)
+                const AppLoadingState(
+                  label: 'Buscando produto…',
+                  layout: AppSkeletonLayout.detail,
+                  inline: true,
+                ),
               if (_error != null)
                 Padding(
                   padding: const EdgeInsets.only(top: AppSpacing.xl),

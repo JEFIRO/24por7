@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_motion.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_tokens.dart';
 
@@ -72,25 +73,83 @@ class AppStatusBadge extends StatelessWidget {
 }
 
 /// Ponto colorido sempre acompanhado da palavra (nunca sozinho).
-class AppStatusDot extends StatelessWidget {
-  const AppStatusDot({required this.label, required this.tone, super.key});
+///
+/// Com [pulse], o ponto emite três ondas ao aparecer: "está no ar agora".
+/// Use só no estado saudável/online. Não fica em loop.
+class AppStatusDot extends StatefulWidget {
+  const AppStatusDot({
+    required this.label,
+    required this.tone,
+    this.pulse = false,
+    super.key,
+  });
   final String label;
   final AppStatusTone tone;
+  final bool pulse;
+
+  @override
+  State<AppStatusDot> createState() => _AppStatusDotState();
+}
+
+class _AppStatusDotState extends State<AppStatusDot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1200),
+  );
+  bool _started = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_started || !widget.pulse) return;
+    _started = true;
+    if (!AppMotion.reduced(context)) _controller.repeat(count: 3);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final (_, foreground) = appToneColors(context, tone);
+    final (_, foreground) = appToneColors(context, widget.tone);
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(color: foreground, shape: BoxShape.circle),
+        CustomPaint(
+          size: const Size.square(8),
+          painter: _DotPainter(foreground, _controller),
         ),
         const SizedBox(width: AppSpacing.sm),
-        Text(label, style: Theme.of(context).textTheme.bodyMedium),
+        Text(widget.label, style: Theme.of(context).textTheme.bodyMedium),
       ],
     );
   }
+}
+
+class _DotPainter extends CustomPainter {
+  _DotPainter(this.color, this.wave) : super(repaint: wave);
+  final Color color;
+  final AnimationController wave;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    final radius = size.shortestSide / 2;
+    if (wave.isAnimating) {
+      final t = Curves.easeOut.transform(wave.value);
+      canvas.drawCircle(
+        center,
+        radius * (1 + 1.6 * t),
+        Paint()..color = color.withValues(alpha: .35 * (1 - t)),
+      );
+    }
+    canvas.drawCircle(center, radius, Paint()..color = color);
+  }
+
+  @override
+  bool shouldRepaint(_DotPainter oldDelegate) => oldDelegate.color != color;
 }

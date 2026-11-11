@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ícone do splash do Android 12+. A área do ícone tem 288dp; a margem
+     deixa o logo com 160dp, o mesmo tamanho do splash do Flutter, para as
+     duas telas parecerem uma só. -->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/launch_logo"
+    android:inset="22.2%" />

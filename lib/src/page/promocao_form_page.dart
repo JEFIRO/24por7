@@ -463,7 +463,7 @@ class _PromocaoFormPageState extends State<PromocaoFormPage> {
           ],
         ),
         if (_loadingProducts)
-          const AppLoadingState(label: 'Carregando produtos…')
+          const AppLoadingState(label: 'Carregando produtos…', inline: true)
         else if (_loadError != null)
           AppErrorState(
             title: 'Não foi possível carregar os produtos',

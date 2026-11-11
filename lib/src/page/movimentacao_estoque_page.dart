@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/widgets/app_refresh.dart';
 import '../../core/formatters/app_formatters.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/app_tokens.dart';
@@ -65,7 +66,7 @@ class _MovimentacaoEstoquePageState extends State<MovimentacaoEstoquePage> {
   };
 
   @override
-  Widget build(BuildContext context) => RefreshIndicator(
+  Widget build(BuildContext context) => AppRefreshIndicator(
     onRefresh: () async {
       reload();
       await future.catchError((_) => const <MovimentoEstoque>[]);
@@ -103,6 +104,7 @@ class _MovimentacaoEstoquePageState extends State<MovimentacaoEstoquePage> {
                   if (s.connectionState != ConnectionState.done) {
                     return const AppLoadingState(
                       label: 'Carregando movimentações…',
+                      inline: true,
                     );
                   }
                   if (s.hasError) {

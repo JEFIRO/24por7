@@ -2,6 +2,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/widgets/app_feedback.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/widgets/app_content.dart';
 import '../../core/widgets/async_state.dart';
@@ -50,9 +51,6 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
   final _nomeExibicao = TextEditingController();
   final _logoUrl = TextEditingController();
   final _logoDarkUrl = TextEditingController();
-  final _corPrincipal = TextEditingController();
-  final _corSecundaria = TextEditingController();
-  final _corDestaque = TextEditingController();
 
   final _nome = TextEditingController();
   final _sobrenome = TextEditingController();
@@ -64,6 +62,9 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
   String? _error;
   bool _savingEmpresa = false;
   bool _savingPerfil = false;
+
+  /// Cores vindas do back, devolvidas sem alteração ao salvar.
+  var _cores = ('', '', '');
 
   /// Variante do logo em envio/remoção: 'claro', 'escuro' ou null.
   String? _logoBusy;
@@ -81,9 +82,6 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
       _nomeExibicao,
       _logoUrl,
       _logoDarkUrl,
-      _corPrincipal,
-      _corSecundaria,
-      _corDestaque,
       _nome,
       _sobrenome,
       _email,
@@ -123,9 +121,7 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
     _nomeExibicao.text = b.nomeExibicao;
     _logoUrl.text = b.logoUrl ?? '';
     _logoDarkUrl.text = b.logoDarkUrl ?? '';
-    _corPrincipal.text = b.corPrincipal.toUpperCase();
-    _corSecundaria.text = b.corSecundaria.toUpperCase();
-    _corDestaque.text = b.corDestaque.toUpperCase();
+    _cores = (b.corPrincipal, b.corSecundaria, b.corDestaque);
   }
 
   Future<void> _saveEmpresa() async {
@@ -138,9 +134,9 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
           nomeExibicao: _nomeExibicao.text,
           logoUrl: _logoUrl.text,
           logoDarkUrl: _logoDarkUrl.text,
-          corPrincipal: _corPrincipal.text.trim(),
-          corSecundaria: _corSecundaria.text.trim(),
-          corDestaque: _corDestaque.text.trim(),
+          corPrincipal: _cores.$1,
+          corSecundaria: _cores.$2,
+          corDestaque: _cores.$3,
         ),
       );
       if (mounted) setState(() => _fillEmpresa(saved));
@@ -200,7 +196,7 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
         picked.name,
         escuro: escuro,
       );
-      // Só o logo muda: edições não salvas de nome e cores continuam no form.
+      // Só o logo muda: edições não salvas do nome continuam no form.
       if (mounted) setState(() => _fillLogos(saved));
       messenger.showSnackBar(const SnackBar(content: Text('Logo enviado')));
     } catch (error) {
@@ -245,9 +241,6 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
     return null;
   }
 
-  static String? _hexColor(String? v) =>
-      isHexColor(v ?? '') ? null : 'Use o formato #RRGGBB';
-
   @override
   Widget build(BuildContext context) => ListView(
     children: [
@@ -258,11 +251,15 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
           children: [
             const AppPageHeader(
               title: 'Empresa e perfil',
-              subtitle: 'Nome, logo e cores do painel, e os seus dados.',
+              subtitle: 'Nome e logo da Empresa, e os seus dados.',
             ),
             const SizedBox(height: AppSpacing.xl),
             if (!_loaded && _loading)
-              const AppLoadingState(label: 'Carregando dados da Empresa…')
+              const AppLoadingState(
+                label: 'Carregando dados da Empresa…',
+                layout: AppSkeletonLayout.detail,
+                inline: true,
+              )
             else if (!_loaded)
               AppErrorState(
                 title: 'Não foi possível carregar os dados da Empresa',
@@ -289,12 +286,7 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
     child: FilledButton.icon(
       key: key,
       onPressed: saving ? null : onPressed,
-      icon: saving
-          ? const SizedBox.square(
-              dimension: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : const Icon(Icons.check, size: 18),
+      icon: AppBusyIcon(busy: saving, icon: Icons.check),
       label: Text(saving ? 'Salvando…' : 'Salvar'),
     ),
   );
@@ -322,12 +314,10 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
               OutlinedButton.icon(
                 key: const Key('branding-upload'),
                 onPressed: _logoBusy != null || !enabled ? null : _uploadLogo,
-                icon: _logoBusy == 'claro'
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.upload_outlined, size: 18),
+                icon: AppBusyIcon(
+                  busy: _logoBusy == 'claro',
+                  icon: Icons.upload_outlined,
+                ),
                 label: Text(
                   _logoBusy == 'claro' ? 'Enviando…' : 'Enviar imagem',
                 ),
@@ -380,43 +370,14 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
                 onPressed: _logoBusy != null || !enabled
                     ? null
                     : () => _uploadLogo(escuro: true),
-                icon: _logoBusy == 'escuro'
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.upload_outlined),
+                icon: AppBusyIcon(
+                  busy: _logoBusy == 'escuro',
+                  icon: Icons.upload_outlined,
+                  size: 24,
+                ),
               ),
             ),
             validator: _httpsUrl,
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          Wrap(
-            spacing: AppSpacing.md,
-            runSpacing: AppSpacing.md,
-            children: [
-              _ColorField(
-                label: 'Cor principal',
-                controller: _corPrincipal,
-                enabled: enabled,
-                validator: _hexColor,
-                onChanged: () => setState(() {}),
-              ),
-              _ColorField(
-                label: 'Cor secundária',
-                controller: _corSecundaria,
-                enabled: enabled,
-                validator: _hexColor,
-                onChanged: () => setState(() {}),
-              ),
-              _ColorField(
-                label: 'Cor de destaque',
-                controller: _corDestaque,
-                enabled: enabled,
-                validator: _hexColor,
-                onChanged: () => setState(() {}),
-              ),
-            ],
           ),
           const SizedBox(height: AppSpacing.lg),
           _saveButton(
@@ -551,11 +512,9 @@ class _LogoPreview extends StatelessWidget {
     final placeholder = Center(
       child: Text(
         initial,
-        style: TextStyle(
-          fontSize: 32,
-          fontWeight: FontWeight.w700,
-          color: scheme.primary,
-        ),
+        style: Theme.of(
+          context,
+        ).textTheme.headlineLarge?.copyWith(color: scheme.primary),
       ),
     );
     return Row(
@@ -588,53 +547,6 @@ class _LogoPreview extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _ColorField extends StatelessWidget {
-  const _ColorField({
-    required this.label,
-    required this.controller,
-    required this.enabled,
-    required this.validator,
-    required this.onChanged,
-  });
-  final String label;
-  final TextEditingController controller;
-  final bool enabled;
-  final FormFieldValidator<String> validator;
-  final VoidCallback onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = parseHexColor(controller.text);
-    final scheme = Theme.of(context).colorScheme;
-    return SizedBox(
-      width: 200,
-      child: TextFormField(
-        controller: controller,
-        enabled: enabled,
-        maxLength: 7,
-        decoration: InputDecoration(
-          labelText: label,
-          counterText: '',
-          prefixIcon: Padding(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            child: Container(
-              width: 20,
-              height: 20,
-              decoration: BoxDecoration(
-                color: color ?? Colors.transparent,
-                shape: BoxShape.circle,
-                border: Border.all(color: scheme.outline),
-              ),
-            ),
-          ),
-        ),
-        validator: validator,
-        onChanged: (_) => onChanged(),
-      ),
     );
   }
 }

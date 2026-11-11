@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/widgets/app_feedback.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/widgets/app_content.dart';
@@ -257,7 +258,10 @@ class _InventarioDetailPageState extends State<InventarioDetailPage> {
             )
           : null,
       body: _loading
-          ? const AppLoadingState(label: 'Carregando inventário…')
+          ? const AppLoadingState(
+              label: 'Carregando inventário…',
+              layout: AppSkeletonLayout.detail,
+            )
           : _error != null
           ? AppErrorState(message: _error!, onRetry: _carregar)
           : inventario == null
@@ -491,10 +495,7 @@ class _Resumo extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: AppSpacing.xs),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(2),
-                child: LinearProgressIndicator(value: progress, minHeight: 4),
-              ),
+              AppProgressBar(value: progress),
             ],
           ),
         ),

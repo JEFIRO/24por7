@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../core/widgets/app_refresh.dart';
+import '../../core/widgets/app_feedback.dart';
 import '../../core/formatters/app_formatters.dart';
 import '../../core/formatters/app_time.dart';
 import '../../core/theme/app_theme.dart';
@@ -55,6 +57,7 @@ class _DashboardPageState extends State<DashboardPage> {
       return const AppLoadingState(
         key: Key('dashboard-loading'),
         label: 'Carregando indicadores da empresa…',
+        layout: AppSkeletonLayout.dashboard,
       );
     }
     if (_error != null || _dashboard == null) {
@@ -65,7 +68,7 @@ class _DashboardPageState extends State<DashboardPage> {
       );
     }
     final dashboard = _dashboard!;
-    return RefreshIndicator(
+    return AppRefreshIndicator(
       onRefresh: _load,
       child: SingleChildScrollView(
         key: const Key('dashboard-content'),
@@ -377,10 +380,7 @@ class _Checklist extends StatelessWidget {
           ],
         ),
         const SizedBox(height: AppSpacing.xs),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(2),
-          child: LinearProgressIndicator(value: progress, minHeight: 4),
-        ),
+        AppProgressBar(value: progress),
         const SizedBox(height: AppSpacing.sm),
         for (final (label, ok, route) in items)
           InkWell(
@@ -443,8 +443,9 @@ class _Activity extends StatelessWidget {
                 'Cadastros, ajustes de estoque e mudanças de configuração aparecem aqui.',
           )
         else
-          for (final activity in activities)
+          for (final (i, activity) in activities.indexed)
             AppListRow(
+              entranceIndex: i,
               leading: SizedBox(
                 width: 48,
                 child: Text(

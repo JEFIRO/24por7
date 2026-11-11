@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/formatters/decimal_input_formatter.dart';
+import '../../core/widgets/app_feedback.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/widgets/app_content.dart';
 import '../../core/widgets/status_badge.dart';
@@ -1345,12 +1346,7 @@ class _SaveButton extends StatelessWidget {
   Widget build(BuildContext context) => FilledButton.icon(
     key: const Key('save-product-button'),
     onPressed: saving ? null : onPressed,
-    icon: saving
-        ? const SizedBox.square(
-            dimension: 18,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          )
-        : const Icon(Icons.check, size: 18),
+    icon: AppBusyIcon(busy: saving, icon: Icons.check),
     label: Text(saving ? 'Salvando…' : 'Salvar produto'),
   );
 }

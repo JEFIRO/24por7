@@ -1,5 +1,4 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 
 import '../../core/theme/branding_config.dart';
 import 'api_client.dart';
@@ -22,16 +21,10 @@ class EmpresaBranding {
   final String corSecundaria;
   final String corDestaque;
 
-  /// Cores que o back devolve quando a Empresa nunca escolheu as suas.
+  /// Cores que o back devolve quando a Empresa nunca escolheu as suas. O
+  /// painel não usa nem edita cores por Empresa; apenas devolve ao back o
+  /// que recebeu, porque o contrato do PUT exige os três campos.
   static const _defaultCores = ('#169DFF', '#62C8FF', '#00D084');
-
-  bool get coresPersonalizadas =>
-      (
-        corPrincipal.toUpperCase(),
-        corSecundaria.toUpperCase(),
-        corDestaque.toUpperCase(),
-      ) !=
-      _defaultCores;
 
   factory EmpresaBranding.fromJson(Map<String, dynamic> json) {
     String? url(Object? v) {
@@ -60,31 +53,14 @@ class EmpresaBranding {
     'corDestaque': corDestaque.toUpperCase(),
   };
 
-  /// Aplica sobre o padrão do app. Sem cores próprias, mantém o design system.
-  BrandingConfig toConfig() {
-    const base = BrandingConfig.fallback;
-    final primary = coresPersonalizadas ? parseHexColor(corPrincipal) : null;
-    final secondary = coresPersonalizadas ? parseHexColor(corSecundaria) : null;
-    return BrandingConfig(
-      displayName: nomeExibicao.trim().isEmpty
-          ? base.displayName
-          : nomeExibicao.trim(),
-      primaryColor: primary ?? base.primaryColor,
-      secondaryColor: secondary ?? base.secondaryColor,
-      logoUrl: logoUrl,
-      compactLogoUrl: logoUrl,
-    );
-  }
-}
-
-final _hex = RegExp(r'^#[0-9A-Fa-f]{6}$');
-
-bool isHexColor(String value) => _hex.hasMatch(value.trim());
-
-Color? parseHexColor(String value) {
-  final v = value.trim();
-  if (!isHexColor(v)) return null;
-  return Color(int.parse('FF${v.substring(1)}', radix: 16));
+  /// Nome e logo da Empresa sobre o padrão do app.
+  BrandingConfig toConfig() => BrandingConfig(
+    displayName: nomeExibicao.trim().isEmpty
+        ? BrandingConfig.fallback.displayName
+        : nomeExibicao.trim(),
+    logoUrl: logoUrl,
+    compactLogoUrl: logoUrl,
+  );
 }
 
 /// Branding atual do painel; o MaterialApp reconstrói o tema quando muda.

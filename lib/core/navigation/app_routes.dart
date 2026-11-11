@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../src/model/api_client.dart';
+import '../theme/app_brand.dart';
+import '../widgets/async_state.dart';
+import '../widgets/brand_logo.dart';
 import '../../src/page/home_page.dart';
 import '../../src/page/login_page.dart';
 import '../../src/page/onboarding_page.dart';
@@ -62,9 +65,13 @@ abstract final class AppRoutes {
       );
     }
     if (shellRoutes.contains(route)) {
-      return MaterialPageRoute<void>(
+      // Barra e menu ficam parados entre destinos; só o conteúdo entra em
+      // fade (ver HomePage).
+      return PageRouteBuilder<void>(
         settings: settings,
-        builder: (_) => HomePage(initialLocation: route),
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+        pageBuilder: (_, _, _) => HomePage(initialLocation: route),
       );
     }
     if (route.startsWith('/terminais/')) {
@@ -103,7 +110,14 @@ class _ProductRoutePage extends StatelessWidget {
         );
       }
       if (!snapshot.hasData) {
-        return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        return const Scaffold(
+          body: SafeArea(
+            child: AppLoadingState(
+              label: 'Carregando produto…',
+              layout: AppSkeletonLayout.detail,
+            ),
+          ),
+        );
       }
       return CadastraProduto(produto: snapshot.data);
     },
@@ -119,11 +133,11 @@ class _NotFoundPage extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.route_outlined, size: 56),
+          const BrandLogo(size: 96),
           const SizedBox(height: 16),
           Text(
             'Página não encontrada',
-            style: Theme.of(context).textTheme.titleLarge,
+            style: AppBrand.display(Theme.of(context).textTheme.titleLarge),
           ),
           const SizedBox(height: 16),
           FilledButton(

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/widgets/app_refresh.dart';
 import '../../core/formatters/app_formatters.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/widgets/app_content.dart';
@@ -297,7 +298,7 @@ class _AdminHistoryPageState<T> extends State<_AdminHistoryPage<T>> {
     final mobile = AppBreakpoints.isMobile(context);
     final data = _data;
     final useTable = !mobile && widget.columns != null && widget.cells != null;
-    return RefreshIndicator(
+    return AppRefreshIndicator(
       onRefresh: () => _load(data?.page ?? 0),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
@@ -352,7 +353,7 @@ class _AdminHistoryPageState<T> extends State<_AdminHistoryPage<T>> {
                 ],
                 const SizedBox(height: AppSpacing.lg),
                 if (_loading && data == null)
-                  const AppLoadingState()
+                  const AppLoadingState(inline: true)
                 else if (_error != null && data == null)
                   AppErrorState(message: _error!, onRetry: () => _load(0))
                 else ...[
@@ -388,11 +389,12 @@ class _AdminHistoryPageState<T> extends State<_AdminHistoryPage<T>> {
                       ],
                     )
                   else
-                    for (final item in data.items)
+                    for (final (i, item) in data.items.indexed)
                       Builder(
                         builder: (context) {
                           final spec = widget.row(item);
                           return AppListRow(
+                            entranceIndex: i,
                             title: spec.title,
                             meta: spec.meta,
                             metaMaxLines: 4,

@@ -26,7 +26,7 @@ void main() {
     var retries = 0;
     await tester.pumpWidget(
       MaterialApp(
-        theme: AppTheme.light(BrandingConfig.fallback),
+        theme: AppTheme.light(),
         home: Scaffold(
           body: AppErrorState(
             message: 'Falha controlada',
@@ -50,7 +50,7 @@ void main() {
       BrandingScope(
         branding: BrandingConfig.fallback,
         child: MaterialApp(
-          theme: AppTheme.light(BrandingConfig.fallback),
+          theme: AppTheme.light(),
           home: const HomePage(initialLocation: '/mais'),
         ),
       ),
@@ -74,7 +74,7 @@ void main() {
       BrandingScope(
         branding: const BrandingConfig(displayName: 'Mercado Firenze'),
         child: MaterialApp(
-          theme: AppTheme.light(BrandingConfig.fallback),
+          theme: AppTheme.light(),
           home: const HomePage(initialLocation: '/mais'),
         ),
       ),

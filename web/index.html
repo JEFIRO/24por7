@@ -18,21 +18,57 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="Painel administrativo e operacional App 24/7.">
+  <meta name="description" content="Painel administrativo e operacional dos mercados autônomos 24/7.">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="App 24/7">
+  <meta name="apple-mobile-web-app-title" content="Painel 24/7">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>App 24/7 — Operação</title>
+  <title>Painel 24/7</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- Splash do Painel 24/7 enquanto o Flutter carrega. -->
+  <style>
+    html, body { height: 100%; margin: 0; background: #FFFFFF; }
+    #splash {
+      position: fixed; inset: 0; display: grid; place-items: center;
+      background: #FFFFFF; transition: opacity 200ms ease-in;
+    }
+    #splash.done { opacity: 0; pointer-events: none; }
+    #splash .mark { position: relative; width: 168px; height: 168px; }
+    #splash img { position: absolute; inset: 24px; width: 120px; height: 120px; }
+    #splash .ring {
+      position: absolute; inset: 0; border-radius: 50%;
+      border: 4px solid transparent;
+      border-top-color: #0070D0; border-bottom-color: #F87000;
+      animation: splash-spin 2.4s linear infinite;
+    }
+    @keyframes splash-spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) {
+      #splash .ring { animation: none; }
+      #splash { transition: none; }
+    }
+  </style>
 </head>
 <body>
+  <div id="splash" role="status" aria-label="Carregando o Painel 24/7">
+    <div class="mark">
+      <div class="ring"></div>
+      <img src="icons/Icon-192.png" alt="">
+    </div>
+  </div>
+  <script>
+    window.addEventListener('flutter-first-frame', function () {
+      var splash = document.getElementById('splash');
+      splash.classList.add('done');
+      setTimeout(function () { splash.remove(); }, 250);
+    });
+  </script>
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/widgets/app_refresh.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/widgets/app_content.dart';
 import '../../core/widgets/async_state.dart';
@@ -131,7 +132,7 @@ class _State extends State<EstoqueCondominioPage> {
     final theme = Theme.of(context);
     final mobile = AppBreakpoints.isMobile(context);
     final visible = _visible;
-    return RefreshIndicator(
+    return AppRefreshIndicator(
       onRefresh: load,
       child: ListView(
         children: [
@@ -157,7 +158,10 @@ class _State extends State<EstoqueCondominioPage> {
                 ),
                 const SizedBox(height: AppSpacing.xl),
                 if (loading)
-                  const AppLoadingState(label: 'Carregando estoque…')
+                  const AppLoadingState(
+                    label: 'Carregando estoque…',
+                    inline: true,
+                  )
                 else if (error != null)
                   AppErrorState(message: error!, onRetry: load)
                 else if (items.isEmpty)

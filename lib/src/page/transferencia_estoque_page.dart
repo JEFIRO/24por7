@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../../core/widgets/app_refresh.dart';
 import '../../core/formatters/app_formatters.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/widgets/app_content.dart';
@@ -59,7 +60,7 @@ class _TransferenciaEstoquePageState extends State<TransferenciaEstoquePage> {
   @override
   Widget build(BuildContext context) {
     final mobile = AppBreakpoints.isMobile(context);
-    return RefreshIndicator(
+    return AppRefreshIndicator(
       onRefresh: () async {
         load();
         await future.catchError((_) => const <TransferenciaEstoque>[]);
@@ -95,6 +96,7 @@ class _TransferenciaEstoquePageState extends State<TransferenciaEstoquePage> {
                     if (s.connectionState != ConnectionState.done) {
                       return const AppLoadingState(
                         label: 'Carregando transferências…',
+                        inline: true,
                       );
                     }
                     if (s.hasError) {
@@ -355,7 +357,10 @@ class _TransferenciaFormPageState extends State<TransferenciaFormPage> {
             )
           : null,
       body: loading
-          ? const AppLoadingState(label: 'Carregando Condomínios…')
+          ? const AppLoadingState(
+              label: 'Carregando Condomínios…',
+              layout: AppSkeletonLayout.detail,
+            )
           : error != null
           ? AppErrorState(
               message: error!,
@@ -977,7 +982,10 @@ class _TransferenciaDetailPageState extends State<TransferenciaDetailPage> {
         if (!s.hasData) {
           return s.hasError
               ? AppErrorState(message: s.error.toString(), onRetry: load)
-              : const AppLoadingState(label: 'Carregando transferência…');
+              : const AppLoadingState(
+                  label: 'Carregando transferência…',
+                  layout: AppSkeletonLayout.detail,
+                );
         }
         final t = s.data!;
         final theme = Theme.of(context);

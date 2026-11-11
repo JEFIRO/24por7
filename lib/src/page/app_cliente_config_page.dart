@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/widgets/app_feedback.dart';
 import '../../core/formatters/app_formatters.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/widgets/app_content.dart';
@@ -164,19 +165,18 @@ class _AppClienteConfigPageState extends State<AppClienteConfigPage> {
                   FilledButton.icon(
                     key: const Key('app-cliente-save'),
                     onPressed: !_loaded || _saving || _loading ? null : _save,
-                    icon: _saving
-                        ? const SizedBox.square(
-                            dimension: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.check, size: 18),
+                    icon: AppBusyIcon(busy: _saving, icon: Icons.check),
                     label: Text(_saving ? 'Salvando…' : 'Salvar'),
                   ),
                 ],
               ),
               const SizedBox(height: AppSpacing.xl),
               if (!_loaded && _loading)
-                const AppLoadingState(label: 'Carregando configurações…')
+                const AppLoadingState(
+                  label: 'Carregando configurações…',
+                  layout: AppSkeletonLayout.detail,
+                  inline: true,
+                )
               else if (!_loaded)
                 AppErrorState(
                   title: 'Não foi possível carregar as configurações',

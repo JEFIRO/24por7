@@ -1,9 +1,16 @@
+import '../../core/theme/app_motion.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 /// Leitor de código de barras (e QR). O cromo da câmera é sempre escuro, nos dois
 /// temas, porque fica sobre a imagem ao vivo.
+// A câmera pede uma interface escura própria, fora do tema claro do painel.
+const _scannerChrome = Color(0xFF0B0D12);
+const _scannerMuted = Color(0xFFC3C6D8);
+const _scannerScrim = Color(0xB30B0D12);
+const _scannerLine = Color(0xE6BA1A1A);
+
 class ScannerPage extends StatefulWidget {
   const ScannerPage({
     this.title = 'Leitor de código de barras',
@@ -18,13 +25,30 @@ class ScannerPage extends StatefulWidget {
   State<ScannerPage> createState() => _ScannerPageState();
 }
 
-class _ScannerPageState extends State<ScannerPage> {
-  static const _chrome = Color(0xFF0B0D12);
+class _ScannerPageState extends State<ScannerPage>
+    with SingleTickerProviderStateMixin {
   final _controller = MobileScannerController();
   bool scanned = false;
 
+  /// Linha de leitura subindo e descendo dentro da moldura.
+  late final AnimationController _scan = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1800),
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (AppMotion.reduced(context)) {
+      _scan.stop();
+    } else if (!_scan.isAnimating) {
+      _scan.repeat(reverse: true);
+    }
+  }
+
   @override
   void dispose() {
+    _scan.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -44,9 +68,9 @@ class _ScannerPageState extends State<ScannerPage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    backgroundColor: _chrome,
+    backgroundColor: _scannerChrome,
     appBar: AppBar(
-      backgroundColor: _chrome,
+      backgroundColor: _scannerChrome,
       foregroundColor: Colors.white,
       shape: const Border(),
       title: Text(widget.title),
@@ -82,19 +106,17 @@ class _ScannerPageState extends State<ScannerPage> {
                     color: Colors.white,
                   ),
                   const SizedBox(height: 12),
-                  const Text(
+                  Text(
                     'Não foi possível usar a câmera',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.titleMedium?.copyWith(color: Colors.white),
                   ),
                   const SizedBox(height: 4),
                   const Text(
                     'Permita o acesso à câmera nas configurações do aparelho, ou digite o código manualmente.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: Color(0xFFC3C6D8)),
+                    style: TextStyle(color: _scannerMuted),
                   ),
                   const SizedBox(height: 20),
                   OutlinedButton(
@@ -110,7 +132,7 @@ class _ScannerPageState extends State<ScannerPage> {
             ),
           ),
         ),
-        IgnorePointer(child: CustomPaint(painter: _FramePainter())),
+        IgnorePointer(child: CustomPaint(painter: _FramePainter(_scan))),
         Positioned(
           left: 24,
           right: 24,
@@ -118,7 +140,9 @@ class _ScannerPageState extends State<ScannerPage> {
           child: Text(
             widget.hint,
             textAlign: TextAlign.center,
-            style: const TextStyle(color: Colors.white, fontSize: 16),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyLarge?.copyWith(color: Colors.white),
           ),
         ),
       ],
@@ -127,6 +151,11 @@ class _ScannerPageState extends State<ScannerPage> {
 }
 
 class _FramePainter extends CustomPainter {
+  _FramePainter(this.scan) : super(repaint: scan);
+
+  /// 0..1 entre o topo e a base da moldura; parada, a linha fica no meio.
+  final AnimationController scan;
+
   @override
   void paint(Canvas canvas, Size size) {
     final width = size.width.clamp(0, 320) * .82;
@@ -142,7 +171,7 @@ class _FramePainter extends CustomPainter {
         Path()..addRect(Offset.zero & size),
         Path()..addRRect(frame),
       ),
-      Paint()..color = const Color(0xB30B0D12),
+      Paint()..color = _scannerScrim,
     );
     final corner = Paint()
       ..color = Colors.white
@@ -160,11 +189,16 @@ class _FramePainter extends CustomPainter {
         ..drawLine(point, point.translate(arm * dx, 0), corner)
         ..drawLine(point, point.translate(0, arm * dy), corner);
     }
+    final y = scan.isAnimating
+        ? rect.top +
+              12 +
+              (rect.height - 24) * AppMotion.standard.transform(scan.value)
+        : rect.center.dy;
     canvas.drawLine(
-      Offset(rect.left + 12, rect.center.dy),
-      Offset(rect.right - 12, rect.center.dy),
+      Offset(rect.left + 12, y),
+      Offset(rect.right - 12, y),
       Paint()
-        ..color = const Color(0xE6BA1A1A)
+        ..color = _scannerLine
         ..strokeWidth = 2,
     );
   }

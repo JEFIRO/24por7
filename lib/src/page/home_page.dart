@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../core/navigation/app_routes.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/widgets/app_content.dart';
+import '../../core/widgets/app_entrance.dart';
+import '../../core/widgets/brand_logo.dart';
 import '../../core/widgets/app_shell.dart';
 import '../model/admin_repository.dart';
 import '../model/api_client.dart';
@@ -98,7 +100,7 @@ class _HomePageState extends State<HomePage> {
     onNavigate: _navigate,
     onLogout: _logout,
     alertCount: _alertCount,
-    child: _page(),
+    child: AppEntrance(child: _page()),
   );
 }
 
@@ -116,15 +118,18 @@ class MorePage extends StatelessWidget {
           children: [
             const AppPageHeader(title: 'Mais'),
             const SizedBox(height: AppSpacing.lg),
-            for (final d in visibleDestinations())
-              if (!mobileRoutes.contains(d.route))
-                AppListRow(
-                  title: d.label,
-                  dense: true,
-                  leading: Icon(d.icon),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => onNavigate(d.route),
-                ),
+            for (final (i, d)
+                in visibleDestinations()
+                    .where((d) => !mobileRoutes.contains(d.route))
+                    .indexed)
+              AppListRow(
+                entranceIndex: i,
+                title: d.label,
+                dense: true,
+                leading: Icon(d.icon),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => onNavigate(d.route),
+              ),
             const SizedBox(height: AppSpacing.xl),
             AppListRow(
               title: 'Sair',
@@ -141,6 +146,8 @@ class MorePage extends StatelessWidget {
                 );
               },
             ),
+            const SizedBox(height: AppSpacing.xxl),
+            const Center(child: BrandLogo(size: 72, showWordmark: true)),
           ],
         ),
       ),

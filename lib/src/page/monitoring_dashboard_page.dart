@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../core/widgets/app_refresh.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/widgets/app_content.dart';
 import '../../core/widgets/async_state.dart';
@@ -136,7 +137,7 @@ class _MonitoringDashboardPageState extends State<MonitoringDashboardPage> {
     final terminals = [...?dashboard?.terminals]
       ..sort((a, b) => _severity(a.status).compareTo(_severity(b.status)));
     final mobile = AppBreakpoints.isMobile(context);
-    return RefreshIndicator(
+    return AppRefreshIndicator(
       onRefresh: _load,
       child: ListView(
         children: [
@@ -219,7 +220,10 @@ class _MonitoringDashboardPageState extends State<MonitoringDashboardPage> {
                 ),
                 const SizedBox(height: AppSpacing.xl),
                 if (_loading && dashboard == null)
-                  const AppLoadingState(label: 'Carregando Terminais…')
+                  const AppLoadingState(
+                    label: 'Carregando Terminais…',
+                    inline: true,
+                  )
                 else if (_error != null && dashboard == null)
                   AppErrorState(
                     title: 'Não foi possível carregar os Terminais',
@@ -266,6 +270,7 @@ class _Summary extends StatelessWidget {
       AppStatusDot(
         label: '${dashboard.saudaveis} saudáveis',
         tone: AppStatusTone.success,
+        pulse: dashboard.saudaveis > 0,
       ),
       AppStatusDot(
         label: '${dashboard.atencao} em atenção',

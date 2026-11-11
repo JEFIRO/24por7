@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../core/widgets/app_refresh.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/widgets/app_content.dart';
 import '../../core/widgets/async_state.dart';
@@ -113,14 +114,17 @@ class _TerminalTelemetryDetailPageState
       ],
     ),
     body: _loading && _terminal == null
-        ? const AppLoadingState(label: 'Carregando telemetria do Terminal…')
+        ? const AppLoadingState(
+            label: 'Carregando telemetria do Terminal…',
+            layout: AppSkeletonLayout.dashboard,
+          )
         : _error != null && _terminal == null
         ? AppErrorState(
             title: 'Não foi possível carregar o Terminal',
             message: _error!,
             onRetry: _load,
           )
-        : RefreshIndicator(
+        : AppRefreshIndicator(
             onRefresh: _load,
             child: ListView(
               children: [AppContent(child: _content(context, _terminal!))],
@@ -496,7 +500,7 @@ class _HistorySection extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.lg),
         if (loading)
-          const AppLoadingState(label: 'Carregando amostras…')
+          const AppLoadingState(label: 'Carregando amostras…', inline: true)
         else if (history.isEmpty)
           const AppEmptyState(
             icon: Icons.show_chart,

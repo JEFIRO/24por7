@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../../core/theme/app_theme.dart';
+import '../../core/theme/app_brand.dart';
+import '../../core/widgets/app_feedback.dart';
+import '../../core/theme/app_motion.dart';
+import '../../core/widgets/brand_logo.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/widgets/app_content.dart';
 import '../../core/widgets/status_badge.dart';
@@ -20,6 +23,9 @@ class _OnboardingPageState extends State<OnboardingPage> {
   bool _loading = false;
   String? _error;
   int _step = 0;
+
+  /// Sentido da última troca de etapa, para a direção da transição.
+  bool _forward = true;
 
   static const _steps = [
     'Gestor',
@@ -131,7 +137,11 @@ class _OnboardingPageState extends State<OnboardingPage> {
       await showDialog<void>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('Cadastro concluído'),
+          icon: const AppSuccessMark(),
+          title: Text(
+            'Cadastro concluído',
+            style: AppBrand.display(Theme.of(context).textTheme.titleLarge),
+          ),
           content: Text(
             'Empresa, condomínio e Terminal foram criados.\n\nTerminal: ${result['terminalId']}',
           ),
@@ -156,7 +166,10 @@ class _OnboardingPageState extends State<OnboardingPage> {
     if (_step == _steps.length - 1) {
       _submit();
     } else {
-      setState(() => _step++);
+      setState(() {
+        _forward = true;
+        _step++;
+      });
     }
   }
 
@@ -271,21 +284,62 @@ class _OnboardingPageState extends State<OnboardingPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
-                  'PASSO ${_step + 1} DE ${_steps.length}',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                    letterSpacing: .5,
+                // A etapa nova entra do lado para onde se avança.
+                AnimatedSwitcher(
+                  duration: AppMotion.of(context, AppMotion.base),
+                  switchInCurve: AppMotion.enter,
+                  switchOutCurve: AppMotion.exit,
+                  layoutBuilder: (current, previous) => Stack(
+                    alignment: Alignment.topCenter,
+                    children: [...previous, ?current],
+                  ),
+                  transitionBuilder: (child, animation) {
+                    final entering = child.key == ValueKey(_step);
+                    final from = (_forward ? 1 : -1) * (entering ? 1 : -1);
+                    return FadeTransition(
+                      opacity: animation,
+                      child: SlideTransition(
+                        position: Tween(
+                          begin: Offset(.04 * from, 0),
+                          end: Offset.zero,
+                        ).animate(animation),
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: Column(
+                    key: ValueKey(_step),
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        'PASSO ${_step + 1} DE ${_steps.length}',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                          letterSpacing: .5,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        _steps[_step],
+                        style: theme.textTheme.headlineMedium,
+                      ),
+                      const SizedBox(height: AppSpacing.xl),
+                      ..._stepFields(),
+                    ],
                   ),
                 ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(_steps[_step], style: theme.textTheme.headlineMedium),
-                const SizedBox(height: AppSpacing.xl),
-                ..._stepFields(),
-                if (_error != null) ...[
-                  const SizedBox(height: AppSpacing.md),
-                  AppBanner(tone: AppStatusTone.critical, message: _error!),
-                ],
+                AppReveal(
+                  child: _error == null
+                      ? null
+                      : Padding(
+                          key: ValueKey(_error),
+                          padding: const EdgeInsets.only(top: AppSpacing.md),
+                          child: AppBanner(
+                            tone: AppStatusTone.critical,
+                            message: _error!,
+                          ),
+                        ),
+                ),
                 const SizedBox(height: AppSpacing.xl),
                 Row(
                   children: [
@@ -293,13 +347,21 @@ class _OnboardingPageState extends State<OnboardingPage> {
                       TextButton(
                         onPressed: _loading
                             ? null
-                            : () => setState(() => _step--),
+                            : () => setState(() {
+                                _forward = false;
+                                _step--;
+                              }),
                         child: const Text('Voltar'),
                       ),
                     const Spacer(),
-                    FilledButton(
+                    FilledButton.icon(
                       onPressed: _loading ? null : _next,
-                      child: Text(
+                      iconAlignment: IconAlignment.end,
+                      icon: AppBusyIcon(
+                        busy: _loading,
+                        icon: last ? Icons.check : Icons.arrow_forward,
+                      ),
+                      label: Text(
                         _loading
                             ? 'Criando…'
                             : last
@@ -337,9 +399,11 @@ class _OnboardingPageState extends State<OnboardingPage> {
                           icon: const Icon(Icons.arrow_back),
                         ),
                         const SizedBox(height: AppSpacing.lg),
+                        const BrandLogo(size: 88),
+                        const SizedBox(height: AppSpacing.lg),
                         Text(
                           'Configurar nova empresa',
-                          style: theme.textTheme.titleLarge,
+                          style: AppBrand.display(theme.textTheme.titleLarge),
                         ),
                         const SizedBox(height: AppSpacing.xs),
                         Text(
@@ -384,37 +448,11 @@ class _StepRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final colors = AppThemeColors.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
       child: Row(
         children: [
-          Container(
-            width: 28,
-            height: 28,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: current
-                  ? scheme.primary
-                  : done
-                  ? colors.successSoft
-                  : null,
-              border: current || done
-                  ? null
-                  : Border.all(color: scheme.outline),
-            ),
-            child: done
-                ? Icon(Icons.check, size: 16, color: colors.success)
-                : Text(
-                    '${index + 1}',
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: current
-                          ? scheme.onPrimary
-                          : scheme.onSurfaceVariant,
-                    ),
-                  ),
-          ),
+          AppStepDot(number: index + 1, current: current, done: done),
           const SizedBox(width: AppSpacing.md),
           Text(
             label,

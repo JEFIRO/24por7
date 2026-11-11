@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../core/widgets/app_refresh.dart';
+import '../../core/widgets/app_feedback.dart';
 import '../../core/formatters/app_formatters.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/widgets/app_content.dart';
@@ -70,7 +72,7 @@ class _InventarioListPageState extends State<InventarioListPage> {
   @override
   Widget build(BuildContext context) {
     final mobile = AppBreakpoints.isMobile(context);
-    return RefreshIndicator(
+    return AppRefreshIndicator(
       onRefresh: _carregar,
       child: ListView(
         children: [
@@ -102,7 +104,10 @@ class _InventarioListPageState extends State<InventarioListPage> {
                 ),
                 const SizedBox(height: AppSpacing.lg),
                 if (_loading)
-                  const AppLoadingState(label: 'Carregando inventários…')
+                  const AppLoadingState(
+                    label: 'Carregando inventários…',
+                    inline: true,
+                  )
                 else if (_error != null)
                   AppErrorState(message: _error!, onRetry: _carregar)
                 else if (_itens.isEmpty)
@@ -117,8 +122,9 @@ class _InventarioListPageState extends State<InventarioListPage> {
                     ),
                   )
                 else if (mobile)
-                  for (final item in _itens)
+                  for (final (i, item) in _itens.indexed)
                     AppListRow(
+                      entranceIndex: i,
                       title: item.descricao ?? item.localNome,
                       meta:
                           '${item.contados} de ${item.totalProdutos} contados · '
@@ -187,14 +193,10 @@ class _InventarioListPageState extends State<InventarioListPage> {
                         style: tabularFigures,
                       ),
                       const SizedBox(height: AppSpacing.xs),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(2),
-                        child: LinearProgressIndicator(
-                          minHeight: 4,
-                          value: item.totalProdutos == 0
-                              ? 0
-                              : item.contados / item.totalProdutos,
-                        ),
+                      AppProgressBar(
+                        value: item.totalProdutos == 0
+                            ? 0
+                            : item.contados / item.totalProdutos,
                       ),
                     ],
                   ),

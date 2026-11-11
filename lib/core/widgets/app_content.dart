@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 import '../theme/app_tokens.dart';
+import 'app_entrance.dart';
 import 'status_badge.dart';
 
 class AppContent extends StatelessWidget {
@@ -212,6 +213,7 @@ class AppListRow extends StatelessWidget {
     this.muted = false,
     this.metaMaxLines = 2,
     this.trailingOnTitle = false,
+    this.entranceIndex,
     super.key,
   });
 
@@ -228,6 +230,10 @@ class AppListRow extends StatelessWidget {
   /// Põe [trailing] na linha do título, à direita, em vez de centralizado.
   final bool trailingOnTitle;
 
+  /// Posição na lista, para a linha entrar escalonada com as vizinhas na
+  /// primeira exibição. Sem isso, a linha aparece direto.
+  final int? entranceIndex;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -239,7 +245,7 @@ class AppListRow extends StatelessWidget {
       style: (dense ? theme.textTheme.titleSmall : theme.textTheme.titleMedium)
           ?.copyWith(color: muted ? scheme.onSurfaceVariant : null),
     );
-    return InkWell(
+    final row = InkWell(
       onTap: onTap,
       hoverColor: scheme.surfaceContainerLow,
       child: Container(
@@ -296,6 +302,9 @@ class AppListRow extends StatelessWidget {
         ),
       ),
     );
+    return entranceIndex == null
+        ? row
+        : AppEntrance(index: entranceIndex!, child: row);
   }
 }
 
@@ -364,10 +373,13 @@ class AppKpiStrip extends StatelessWidget {
                                 mobile ? AppSpacing.md : AppSpacing.lg,
                               ),
                               child: i < row.length
-                                  ? _KpiCell(
-                                      key: row[i].key,
-                                      item: row[i],
-                                      compact: mobile,
+                                  ? AppEntrance(
+                                      index: rows.indexOf(row) * columns + i,
+                                      child: _KpiCell(
+                                        key: row[i].key,
+                                        item: row[i],
+                                        compact: mobile,
+                                      ),
                                     )
                                   : null,
                             ),
@@ -436,7 +448,6 @@ class _KpiCell extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.titleMedium?.copyWith(
-                fontSize: 16,
                 fontWeight: FontWeight.w600,
                 color: muted,
               ),
@@ -635,15 +646,17 @@ class AppTable extends StatelessWidget {
   final List<DataRow> rows;
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) => SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(minWidth: constraints.maxWidth),
-        child: DataTable(
-          showCheckboxColumn: false,
-          columns: columns,
-          rows: rows,
+  Widget build(BuildContext context) => AppEntrance(
+    child: LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minWidth: constraints.maxWidth),
+          child: DataTable(
+            showCheckboxColumn: false,
+            columns: columns,
+            rows: rows,
+          ),
         ),
       ),
     ),

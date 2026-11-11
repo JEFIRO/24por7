@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/widgets/app_refresh.dart';
 import '../../core/formatters/app_formatters.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/widgets/app_content.dart';
@@ -180,7 +181,7 @@ class _EstoqueProdutoPageState extends State<EstoqueProdutoPage> {
           const SizedBox(width: AppSpacing.sm),
         ],
       ),
-      body: RefreshIndicator(
+      body: AppRefreshIndicator(
         onRefresh: _carregar,
         child: ListView(
           children: [
@@ -270,7 +271,10 @@ class _EstoqueProdutoPageState extends State<EstoqueProdutoPage> {
             ),
           )
         else
-          const AppLoadingState(label: 'Carregando saldo nos condomínios…'),
+          const AppLoadingState(
+            label: 'Carregando saldo nos condomínios…',
+            inline: true,
+          ),
       ];
     }
     if (condos.isEmpty) {
@@ -302,7 +306,7 @@ class _EstoqueProdutoPageState extends State<EstoqueProdutoPage> {
     if (historico == null) {
       return _historicoErro != null
           ? AppErrorState(message: _historicoErro!, onRetry: _carregar)
-          : const AppLoadingState(label: 'Carregando histórico…');
+          : const AppLoadingState(label: 'Carregando histórico…', inline: true);
     }
     if (historico.isEmpty) {
       return const AppEmptyState(

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme/app_motion.dart';
+import '../../core/widgets/app_refresh.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/widgets/app_content.dart';
 import '../../core/widgets/async_state.dart';
@@ -118,7 +120,7 @@ class _EstoqueCentralPageState extends State<EstoqueCentralPage> {
   @override
   Widget build(BuildContext context) {
     final mobile = AppBreakpoints.isMobile(context);
-    return RefreshIndicator(
+    return AppRefreshIndicator(
       onRefresh: load,
       child: ListView(
         controller: _scroll,
@@ -203,7 +205,7 @@ class _EstoqueCentralPageState extends State<EstoqueCentralPage> {
   Widget _body(bool mobile) {
     final theme = Theme.of(context);
     if (loading) {
-      return const AppLoadingState(label: 'Carregando saldos…');
+      return const AppLoadingState(label: 'Carregando saldos…', inline: true);
     }
     if (error != null) return AppErrorState(message: error!, onRetry: load);
     if (items.isEmpty) {
@@ -611,7 +613,7 @@ Future<bool> movimentarEstoqueCentral(
           barrierDismissible: true,
           barrierLabel: 'Fechar',
           barrierColor: Colors.black26,
-          transitionDuration: const Duration(milliseconds: 220),
+          transitionDuration: AppMotion.of(context, AppMotion.slow),
           pageBuilder: (context, _, _) => Align(
             alignment: Alignment.centerRight,
             child: Material(
@@ -640,7 +642,8 @@ Future<bool> movimentarEstoqueCentral(
                 .animate(
                   CurvedAnimation(
                     parent: animation,
-                    curve: Curves.easeOutCubic,
+                    curve: AppMotion.enter,
+                    reverseCurve: AppMotion.exit,
                   ),
                 ),
             child: child,

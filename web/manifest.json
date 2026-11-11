@@ -1,11 +1,11 @@
 {
-    "name": "App 24/7 — Operação",
-    "short_name": "App 24/7",
+    "name": "Painel 24/7",
+    "short_name": "Painel 24/7",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#FFFFFF",
-    "theme_color": "#155EEF",
-    "description": "A new Flutter project.",
+    "theme_color": "#0070D0",
+    "description": "Painel administrativo e operacional dos mercados autônomos 24/7.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

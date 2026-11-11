@@ -6,6 +6,7 @@ import '../navigation/app_routes.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_tokens.dart';
 import '../theme/branding_config.dart';
+import 'brand_logo.dart';
 
 class AppDestination {
   const AppDestination(
@@ -355,53 +356,12 @@ class _BrandMark extends StatelessWidget {
           height: 32,
           width: 32,
           fit: BoxFit.contain,
-          errorBuilder: (_, _, _) =>
-              _fallback(branding.primaryColor, branding.displayName),
+          errorBuilder: (_, _, _) => const BrandLogo(size: 36),
         ),
       );
     }
-    return _fallback(branding.primaryColor, branding.displayName);
-  }
-
-  /// Iniciais da Empresa (até 2 letras) quando não há logo.
-  static String _initials(String name) {
-    final words = name
-        .trim()
-        .split(RegExp(r'\s+'))
-        .where((w) => w.isNotEmpty)
-        .toList();
-    if (words.isEmpty) return '24/7';
-    if (words.length == 1) {
-      final w = words.first;
-      return (w.length > 2 ? w.substring(0, 2) : w).toUpperCase();
-    }
-    return '${words[0][0]}${words[1][0]}'.toUpperCase();
-  }
-
-  Widget _fallback(Color color, String name) {
-    final foreground = color == AppColors.brand
-        ? AppColors.onBrand
-        : ThemeData.estimateBrightnessForColor(color) == Brightness.dark
-        ? Colors.white
-        : Colors.black;
-    return Container(
-      height: 32,
-      constraints: const BoxConstraints(minWidth: 32),
-      padding: const EdgeInsets.symmetric(horizontal: 6),
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-      ),
-      child: Text(
-        _initials(name),
-        style: TextStyle(
-          color: foreground,
-          fontWeight: FontWeight.w800,
-          fontSize: 12,
-        ),
-      ),
-    );
+    // Empresa sem logo: a marca do Painel 24/7 ocupa o lugar.
+    return const BrandLogo(size: 36);
   }
 }
 
@@ -470,10 +430,9 @@ class _UserMenu extends StatelessWidget {
               ? Icon(Icons.person_outline, color: scheme.primary, size: 20)
               : Text(
                   initials,
-                  style: TextStyle(
+                  style: theme.textTheme.labelLarge?.copyWith(
                     color: scheme.primary,
                     fontWeight: FontWeight.w700,
-                    fontSize: 14,
                   ),
                 ),
         ),
@@ -557,7 +516,7 @@ class AdminSidebar extends StatelessWidget {
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       color: scheme.errorContainer,
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
                     ),
                     child: Text(
                       count > 99 ? '99+' : '$count',
@@ -621,6 +580,10 @@ class AdminSidebar extends StatelessWidget {
                 padding: const EdgeInsets.all(AppSpacing.md),
                 children: children,
               ),
+            ),
+            const Padding(
+              padding: EdgeInsets.only(bottom: AppSpacing.md),
+              child: BrandLogo(size: 64, showWordmark: true),
             ),
             if (onCollapse != null) ...[
               const Divider(),

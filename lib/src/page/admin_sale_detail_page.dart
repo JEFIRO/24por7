@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../core/widgets/app_refresh.dart';
 import '../../core/formatters/app_formatters.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/widgets/app_content.dart';
@@ -171,14 +172,17 @@ class _AdminSaleDetailPageState extends State<AdminSaleDetailPage> {
       },
       child: Scaffold(
         appBar: AppBar(title: const Text('Detalhes da venda')),
-        body: RefreshIndicator(
+        body: AppRefreshIndicator(
           onRefresh: _load,
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
             children: [
               AppContent(
                 child: _loading && sale == null
-                    ? const AppLoadingState()
+                    ? const AppLoadingState(
+                        layout: AppSkeletonLayout.detail,
+                        inline: true,
+                      )
                     : _error != null && sale == null
                     ? AppErrorState(message: _error!, onRetry: _load)
                     : _body(context, sale!),
@@ -443,7 +447,7 @@ class _CopyableId extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return InkWell(
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(AppRadius.sm),
       onTap: () async {
         await Clipboard.setData(ClipboardData(text: id));
         if (context.mounted) {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/widgets/app_refresh.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/widgets/app_content.dart';
 import '../../core/widgets/async_state.dart';
@@ -117,7 +118,7 @@ class _ListaProdutoState extends State<ListaProduto> {
         ? const AppLoadingState(label: 'Carregando catálogo…')
         : _error != null && _result == null
         ? AppErrorState(message: _error!, onRetry: _buscar)
-        : RefreshIndicator(
+        : AppRefreshIndicator(
             onRefresh: _buscar,
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
@@ -207,8 +208,9 @@ class _ListaProdutoState extends State<ListaProduto> {
 
   Widget _mobileList() => Column(
     children: [
-      for (final product in _visible)
+      for (final (i, product) in _visible.indexed)
         AppListRow(
+          entranceIndex: i,
           onTap: () => _editar(product),
           muted: !product.ativo,
           title: product.nome,

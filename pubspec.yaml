@@ -1,5 +1,5 @@
 name: app_24por7
-description: "A new Flutter project."
+description: "Painel 24/7: painel administrativo e operacional dos mercados autônomos."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -69,7 +69,7 @@ flutter_launcher_icons:
     generate: true
     image_path: assets/icon/icon.png
     background_color: "#FFFFFF"
-    theme_color: "#155EEF"
+    theme_color: "#0070D0"
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

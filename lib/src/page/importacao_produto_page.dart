@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/widgets/app_feedback.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/widgets/app_content.dart';
 import '../../core/widgets/status_badge.dart';
@@ -352,35 +353,10 @@ class _Passos extends StatelessWidget {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 28,
-                height: 28,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: i + 1 == current
-                      ? scheme.primary
-                      : i + 1 < current
-                      ? appToneColors(context, AppStatusTone.success).$1
-                      : null,
-                  border: i + 1 > current
-                      ? Border.all(color: scheme.outline)
-                      : null,
-                ),
-                child: i + 1 < current
-                    ? Icon(
-                        Icons.check,
-                        size: 16,
-                        color: appToneColors(context, AppStatusTone.success).$2,
-                      )
-                    : Text(
-                        '${i + 1}',
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          color: i + 1 == current
-                              ? scheme.onPrimary
-                              : scheme.onSurfaceVariant,
-                        ),
-                      ),
+              AppStepDot(
+                number: i + 1,
+                current: i + 1 == current,
+                done: i + 1 < current,
               ),
               const SizedBox(width: AppSpacing.sm),
               Text(

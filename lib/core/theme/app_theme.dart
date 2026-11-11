@@ -3,28 +3,15 @@ import 'package:flutter/material.dart';
 export 'app_colors.dart';
 
 import 'app_colors.dart';
+import 'app_motion.dart';
 import 'app_tokens.dart';
-import 'branding_config.dart';
 
 abstract final class AppTheme {
   static const background = AppColors.background;
 
-  /// Esquema padrão do design system; tenant com cor própria gera o esquema
-  /// a partir da semente, mantendo o fundo branco.
-  static ColorScheme schemeFor(BrandingConfig branding) =>
-      branding.primaryColor == AppColors.brand
-      ? lightScheme
-      : ColorScheme.fromSeed(
-          seedColor: branding.primaryColor,
-          dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
-        ).copyWith(surface: Colors.white, surfaceTint: Colors.transparent);
-
-  static ThemeData light(BrandingConfig branding) {
-    final scheme = schemeFor(branding);
-    final colors = AppThemeColors.fallback(
-      scheme,
-      secondary: branding.secondaryColor,
-    );
+  static ThemeData light() {
+    const scheme = lightScheme;
+    final colors = AppThemeColors.fallback(scheme);
     final base = ThemeData(
       useMaterial3: true,
       colorScheme: scheme,
@@ -32,6 +19,12 @@ abstract final class AppTheme {
       scaffoldBackgroundColor: background,
       canvasColor: background,
       splashFactory: InkSparkle.splashFactory,
+      pageTransitionsTheme: PageTransitionsTheme(
+        builders: {
+          for (final platform in TargetPlatform.values)
+            platform: const _AppPageTransition(),
+        },
+      ),
     );
     final text = base.textTheme;
     final fieldLine = BorderSide(color: scheme.outline);
@@ -160,7 +153,9 @@ abstract final class AppTheme {
         foregroundColor: scheme.onPrimary,
         elevation: 2,
         highlightElevation: 3,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+        ),
       ),
       segmentedButtonTheme: SegmentedButtonThemeData(
         style: SegmentedButton.styleFrom(
@@ -251,14 +246,18 @@ abstract final class AppTheme {
         backgroundColor: scheme.surface,
         surfaceTintColor: Colors.transparent,
         elevation: 6,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.xl),
+        ),
       ),
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: scheme.surface,
         surfaceTintColor: Colors.transparent,
         showDragHandle: true,
         shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(AppRadius.xl),
+          ),
         ),
       ),
       popupMenuTheme: PopupMenuThemeData(
@@ -322,6 +321,38 @@ abstract final class AppTheme {
         color: scheme.outlineVariant,
         space: 1,
         thickness: 1,
+      ),
+    );
+  }
+}
+
+/// Transição única entre telas, igual em todas as plataformas: fade com um
+/// deslocamento curto vindo da direita. Com "reduzir movimento", corte seco.
+class _AppPageTransition extends PageTransitionsBuilder {
+  const _AppPageTransition();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    if (AppMotion.reduced(context)) return child;
+    final enter = CurvedAnimation(
+      parent: animation,
+      curve: AppMotion.enter,
+      reverseCurve: AppMotion.exit,
+    );
+    return FadeTransition(
+      opacity: enter,
+      child: SlideTransition(
+        position: Tween(
+          begin: const Offset(.08, 0),
+          end: Offset.zero,
+        ).animate(enter),
+        child: child,
       ),
     );
   }
